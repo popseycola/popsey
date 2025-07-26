@@ -185,10 +185,19 @@
       }
     }
 
-    // --- Enhanced Auto-Save System with Debouncing ---
+    // --- ENHANCED: Real-time Auto-Save System ---
     let saveTimeout = null
-    function triggerAutoSave(action = "data_change") {
+    function triggerAutoSave(action = "data_change", immediate = false) {
       try {
+        if (immediate) {
+          // For critical actions, save immediately
+          updateSyncStatus("syncing")
+          updateDashboardValues()
+          updateLastSaveTime()
+          console.log(`Immediate save: ${action}`)
+          return
+        }
+
         // Clear existing timeout to debounce saves
         if (saveTimeout) {
           clearTimeout(saveTimeout)
@@ -200,7 +209,7 @@
           updateDashboardValues()
           updateLastSaveTime()
           console.log(`Auto-saved: ${action}`)
-        }, 500) // 500ms debounce
+        }, 300) // Reduced debounce time for faster sync
       } catch (error) {
         console.error("Error in triggerAutoSave:", error)
         updateSyncStatus("error")
@@ -678,21 +687,80 @@
       }
     }
 
+    // --- ENHANCED: Shift History Firebase Sync ---
     function saveHistoryToFirebase(historyItem) {
       try {
         if (isOnline && firebaseInitialized && database) {
+          // Save individual history item with unique key
           database
-            .ref("popsey/shift_history")
-            .push(historyItem)
-            .then(() => console.log("History saved to Firebase"))
-            .catch((error) => console.error("Firebase history save error:", error))
+            .ref(`popsey/shift_history/${historyItem.id}`)
+            .set(historyItem)
+            .then(() => {
+              console.log("History saved to Firebase:", historyItem.id)
+              updateSyncStatus("synced")
+            })
+            .catch((error) => {
+              console.error("Firebase history save error:", error)
+              updateSyncStatus("error")
+            })
         } else if (!firebaseInitialized) {
           console.log("Firebase not available - history saved locally only")
+          updateSyncStatus("offline")
         } else {
           addToSyncQueue("save_history", historyItem)
+          updateSyncStatus("pending")
         }
       } catch (error) {
         console.error("Error in saveHistoryToFirebase:", error)
+        updateSyncStatus("error")
+      }
+    }
+
+    // --- NEW: Load Shift History from Firebase ---
+    function loadShiftHistoryFromFirebase() {
+      try {
+        if (!firebaseInitialized || !database) return
+
+        console.log("Loading shift history from Firebase...")
+        database.ref("popsey/shift_history").once("value", (snapshot) => {
+          try {
+            const firebaseHistory = snapshot.val()
+            if (firebaseHistory) {
+              // Convert Firebase object to array
+              const historyArray = Object.values(firebaseHistory)
+
+              // Get local history
+              let localHistory = []
+              try {
+                localHistory = JSON.parse(localStorage.getItem("popsey_shift_history")) || []
+              } catch {}
+
+              // Merge histories (Firebase takes precedence)
+              const mergedHistory = [...historyArray]
+
+              // Add any local items that aren't in Firebase
+              localHistory.forEach((localItem) => {
+                if (!historyArray.find((fbItem) => fbItem.id === localItem.id)) {
+                  mergedHistory.push(localItem)
+                  // Also save this local item to Firebase
+                  saveHistoryToFirebase(localItem)
+                }
+              })
+
+              // Save merged history locally
+              localStorage.setItem("popsey_shift_history", JSON.stringify(mergedHistory))
+
+              // Reload the history table
+              loadShiftHistoryTable()
+
+              console.log(`Loaded ${historyArray.length} history items from Firebase`)
+            }
+          } catch (error) {
+            console.error("Error processing Firebase history:", error)
+          }
+        })
+      } catch (error) {
+        console.error("Error loading shift history from Firebase:", error)
       }
     }
 
@@ -715,7 +783,7 @@
       }
     }
 
-    // --- FIXED: Firebase Real-time Save Function with Loop Prevention ---
+    // --- ENHANCED: Firebase Real-time Save Function ---
     function saveToFirebaseRealtime(path, data) {
       try {
         if (!isOnline || !firebaseInitialized || !database || isFirebaseSyncPaused) {
@@ -738,10 +806,10 @@
             console.log(`Real-time data saved to Firebase: ${path}`)
             updateSyncStatus("synced")
 
-            // Re-enable sync after a delay
+            // Re-enable sync after a shorter delay for faster real-time updates
             setTimeout(() => {
               isFirebaseSyncPaused = false
-            }, 2000)
+            }, 1000) // Reduced from 2000ms
           })
           .catch((error) => {
             console.error("Firebase real-time save error:", error)
@@ -866,15 +934,86 @@
         updateDashboardValues()
         loadShiftHistoryTable()
 
-        // FIXED: Set up Firebase sync AFTER initial load is complete
+        // ENHANCED: Set up Firebase sync AFTER initial load is complete
         setTimeout(() => {
           isInitialLoad = false // Mark initial load as complete
           initializeFirebaseSync()
-        }, 2000) // Reduced delay and moved after initial load
+
+          // Load shift history from Firebase
+          loadShiftHistoryFromFirebase()
+
+          // Set up real-time history sync
+          setupHistorySync()
+        }, 1500) // Reduced delay for faster sync
 
         console.log("Page initialization complete")
       } catch (error) {
         console.error("Error in page initialization:", error)
+      }
+    }
+
+    // --- NEW: Real-time History Sync ---
+    function setupHistorySync() {
+      try {
+        if (!firebaseInitialized || !database) return
+
+        console.log("Setting up real-time history synchronization...")
+
+        // Listen for new history items
+        database.ref("popsey/shift_history").on("child_added", (snapshot) => {
+          try {
+            if (isInitialLoad) return // Skip during initial load
+
+            const newHistoryItem = snapshot.val()
+            if (newHistoryItem) {
+              // Get current local history
+              let localHistory = []
+              try {
+                localHistory = JSON.parse(localStorage.getItem("popsey_shift_history")) || []
+              } catch {}
+
+              // Check if this item already exists locally
+              const existsLocally = localHistory.find((item) => item.id === newHistoryItem.id)
+
+              if (!existsLocally) {
+                console.log("New history item received from Firebase:", newHistoryItem.id)
+                localHistory.push(newHistoryItem)
+                localStorage.setItem("popsey_shift_history", JSON.stringify(localHistory))
+                loadShiftHistoryTable() // Refresh the table
+              }
+            }
+          } catch (error) {
+            console.error("Error processing new history item:", error)
+          }
+        })
+
+        // Listen for deleted history items
+        database.ref("popsey/shift_history").on("child_removed", (snapshot) => {
+          try {
+            if (isInitialLoad) return // Skip during initial load
+
+            const deletedItem = snapshot.val()
+            if (deletedItem) {
+              console.log("History item deleted from Firebase:", deletedItem.id)
+
+              // Remove from local storage
+              let localHistory = []
+              try {
+                localHistory = JSON.parse(localStorage.getItem("popsey_shift_history")) || []
+              } catch {}
+
+              localHistory = localHistory.filter((item) => item.id !== deletedItem.id)
+              localStorage.setItem("popsey_shift_history", JSON.stringify(localHistory))
+              loadShiftHistoryTable() // Refresh the table
+            }
+          } catch (error) {
+            console.error("Error processing deleted history item:", error)
+          }
+        })
+
+        console.log("Real-time history synchronization enabled")
+      } catch (error) {
+        console.error("Error setting up history sync:", error)
       }
     }
 
@@ -987,9 +1126,9 @@
 
         filterBilliardRows()
 
-        // Trigger auto-save only if not during initial load or sync
+        // ENHANCED: Trigger immediate save for critical actions
         if (!isInitialLoad && !isFirebaseSyncPaused) {
-          triggerAutoSave("billiard_update")
+          triggerAutoSave("billiard_update", true) // Immediate save
         }
       } catch (error) {
         console.error("Error in updateBilliardRow:", error)
@@ -1007,7 +1146,7 @@
             updateBilliardRow(row)
             filterBilliardRows()
             if (!isInitialLoad && !isFirebaseSyncPaused) {
-              triggerAutoSave("billiard_table_change")
+              triggerAutoSave("billiard_table_change", true) // Immediate save
             }
           })
         }
@@ -1017,7 +1156,7 @@
         if (nameEl) {
           nameEl.addEventListener("input", () => {
             if (!isInitialLoad && !isFirebaseSyncPaused) {
-              triggerAutoSave("billiard_name_change")
+              triggerAutoSave("billiard_name_change") // Regular debounced save for typing
             }
           })
         }
@@ -1047,7 +1186,7 @@
 
               updateBilliardRow(row)
               if (!isInitialLoad && !isFirebaseSyncPaused) {
-                triggerAutoSave("billiard_mode_change")
+                triggerAutoSave("billiard_mode_change", true) // Immediate save
               }
             }
           })
@@ -1067,7 +1206,7 @@
               gamesValueEl.textContent = val + 1
               updateBilliardRow(row)
               if (!isInitialLoad && !isFirebaseSyncPaused) {
-                triggerAutoSave("billiard_add_game")
+                triggerAutoSave("billiard_add_game", true) // Immediate save
               }
             }
 
@@ -1092,7 +1231,7 @@
               gamesValueEl.textContent = newVal
               updateBilliardRow(row)
               if (!isInitialLoad && !isFirebaseSyncPaused) {
-                triggerAutoSave("billiard_delete_game")
+                triggerAutoSave("billiard_delete_game", true) // Immediate save
               }
             }
 
@@ -1119,7 +1258,7 @@
                 paidInputEl.value = 0
                 updateBilliardRow(row)
                 if (!isInitialLoad && !isFirebaseSyncPaused) {
-                  triggerAutoSave("billiard_add_payment")
+                  triggerAutoSave("billiard_add_payment", true) // Immediate save
                 }
 
                 setTimeout(() => {
@@ -1144,7 +1283,7 @@
                   row._paidHistory.splice(idx, 1)
                   updateBilliardRow(row)
                   if (!isInitialLoad && !isFirebaseSyncPaused) {
-                    triggerAutoSave("billiard_delete_payment")
+                    triggerAutoSave("billiard_delete_payment", true) // Immediate save
                   }
 
                   setTimeout(() => {
@@ -1163,7 +1302,7 @@
             row._isActive = !(row._isActive === true) // toggle between true/false
             updateBilliardRow(row)
             if (!isInitialLoad && !isFirebaseSyncPaused) {
-              triggerAutoSave("billiard_toggle_active")
+              triggerAutoSave("billiard_toggle_active", true) // Immediate save
             }
           })
         }
@@ -1229,7 +1368,7 @@
         filterBilliardRows()
 
         // IMMEDIATE SAVE after adding row
-        triggerAutoSave("add_billiard_row")
+        triggerAutoSave("add_billiard_row", true)
         console.log(`Billiard row added. Total rows: ${billiardRows.length}`)
       } catch (error) {
         console.error("Error adding billiard row:", error)
@@ -1367,15 +1506,15 @@
               row._status = newStatus
               updateGroceryRow(row)
               if (!isInitialLoad && !isFirebaseSyncPaused) {
-                triggerAutoSave("grocery_status_change")
+                triggerAutoSave("grocery_status_change", true) // Immediate save
               }
             })
           }
         }
 
-        // Trigger auto-save only if not during initial load or sync
+        // ENHANCED: Trigger immediate save for critical actions
         if (!isInitialLoad && !isFirebaseSyncPaused) {
-          triggerAutoSave("grocery_update")
+          triggerAutoSave("grocery_update", true) // Immediate save
         }
 
         // Filter rows after update
@@ -1400,7 +1539,7 @@
           amountEl.addEventListener("input", () => {
             updateGroceryRow(row)
             if (!isInitialLoad && !isFirebaseSyncPaused) {
-              triggerAutoSave("grocery_amount_change")
+              triggerAutoSave("grocery_amount_change", true) // Immediate save
             }
           })
         }
@@ -1416,7 +1555,7 @@
             updateGroceryRow(row) // Update status based on table name
             filterGroceryRows() // Filter rows after table name change
             if (!isInitialLoad && !isFirebaseSyncPaused) {
-              triggerAutoSave("grocery_table_change")
+              triggerAutoSave("grocery_table_change") // Regular debounced save for typing
             }
           })
         }
@@ -1430,7 +1569,7 @@
               groceryRecallItems.push(value)
             }
             if (!isInitialLoad && !isFirebaseSyncPaused) {
-              triggerAutoSave("grocery_item_change")
+              triggerAutoSave("grocery_item_change") // Regular debounced save for typing
             }
           })
         }
@@ -1452,7 +1591,7 @@
               purchasesValueEl.textContent = row._purchases
               updateGroceryRow(row)
               if (!isInitialLoad && !isFirebaseSyncPaused) {
-                triggerAutoSave("grocery_add_purchase")
+                triggerAutoSave("grocery_add_purchase", true) // Immediate save
               }
             }
 
@@ -1479,7 +1618,7 @@
               purchasesValueEl.textContent = row._purchases
               updateGroceryRow(row)
               if (!isInitialLoad && !isFirebaseSyncPaused) {
-                triggerAutoSave("grocery_delete_purchase")
+                triggerAutoSave("grocery_delete_purchase", true) // Immediate save
               }
             }
 
@@ -1533,7 +1672,7 @@
         groceryRows.unshift(tr) // Add to beginning of array
 
         // IMMEDIATE SAVE after adding row
-        triggerAutoSave("add_grocery_row")
+        triggerAutoSave("add_grocery_row", true)
         console.log(`Grocery row added. Total rows: ${groceryRows.length}`)
       } catch (error) {
         console.error("Error adding grocery row:", error)
@@ -1648,9 +1787,9 @@
         attachExpenseRowEvents(tr)
         expenseRows.unshift(tr) // Add to beginning of array
 
-        // Hide modal and trigger save
+        // Hide modal and trigger immediate save
         hideExpenseModal()
-        triggerAutoSave("add_expense_row")
+        triggerAutoSave("add_expense_row", true)
         console.log(`Expense row added. Total rows: ${expenseRows.length}`)
       } catch (error) {
         console.error("Error adding expense row:", error)
@@ -1694,9 +1833,9 @@
           }
         }
 
-        // Hide modal and trigger save
+        // Hide modal and trigger immediate save
         hideEditExpenseModal()
-        triggerAutoSave("update_expense_row")
+        triggerAutoSave("update_expense_row", true)
         console.log("Expense row updated")
       } catch (error) {
         console.error("Error updating expense row:", error)
@@ -1723,7 +1862,7 @@
             if (window.confirm("Are you sure you want to delete this expense?")) {
               row.remove()
               expenseRows = expenseRows.filter((r) => r !== row)
-              triggerAutoSave("delete_expense_row")
+              triggerAutoSave("delete_expense_row", true) // Immediate save
               console.log(`Expense row deleted. Total rows: ${expenseRows.length}`)
             }
           })
@@ -2038,7 +2177,7 @@
                   // Remove from billiardRows array
                   billiardRows = billiardRows.filter((row) => row !== tr)
                   filterBilliardRows()
-                  triggerAutoSave("delete_billiard_row")
+                  triggerAutoSave("delete_billiard_row", true) // Immediate save
                 }
                 setTimeout(() => {
                   delRowLocked = false
@@ -2068,7 +2207,7 @@
                   tr.remove()
                   // Remove from groceryRows array
                   groceryRows = groceryRows.filter((row) => row !== tr)
-                  triggerAutoSave("delete_grocery_row")
+                  triggerAutoSave("delete_grocery_row", true) // Immediate save
                 }
                 setTimeout(() => {
                   delGroceryRowLocked = false
@@ -2277,7 +2416,7 @@
           console.error("Error saving shift history:", error)
         }
 
-        // Save to Firebase
+        // Save to Firebase immediately
         saveHistoryToFirebase(historyItem)
         return historyItem
       } catch (error) {
@@ -2734,8 +2873,8 @@
         // Clear localStorage state as well
         localStorage.removeItem("popsey_complete_state")
 
-        // Trigger auto-save to update dashboard
-        triggerAutoSave("reset_tables")
+        // Trigger immediate save to update dashboard and Firebase
+        triggerAutoSave("reset_tables", true)
 
         console.log("All tables reset to empty state")
       } catch (error) {
@@ -2743,7 +2882,7 @@
       }
     }
 
-    // --- FIXED: Enhanced Firebase Real-time Synchronization with Better Logic ---
+    // --- ENHANCED: Firebase Real-time Synchronization ---
     function initializeFirebaseSync() {
       try {
         if (!firebaseInitialized || !database) return
@@ -2766,14 +2905,14 @@
                 console.log("No local data found, syncing from Firebase...")
               } else {
                 const localData = JSON.parse(localState)
-                // Only update if remote data is significantly newer (more than 5 seconds)
+                // Only update if remote data is significantly newer (more than 2 seconds)
                 // AND has more data than local
                 const timeDiff = remoteState.timestamp - (localData.timestamp || 0)
                 const hasMoreData =
                   remoteState.billiardRowsCount + remoteState.groceryRowsCount + remoteState.expenseRowsCount >=
                   localData.billiardRowsCount + localData.groceryRowsCount + localData.expenseRowsCount
 
-                shouldUpdate = timeDiff > 5000 && hasMoreData && remoteState.timestamp > lastSaveTimestamp
+                shouldUpdate = timeDiff > 2000 && hasMoreData && remoteState.timestamp > lastSaveTimestamp
 
                 if (shouldUpdate) {
                   console.log(`Remote data is newer (${timeDiff}ms) and has more/equal data, syncing...`)
@@ -2791,7 +2930,7 @@
                 // Re-enable after processing
                 setTimeout(() => {
                   isFirebaseSyncPaused = false
-                }, 3000)
+                }, 2000)
               }
             }
           } catch (error) {
@@ -2898,16 +3037,11 @@
         // Remove from Firebase if available
         if (isOnline && firebaseInitialized && database) {
           try {
-            database.ref("popsey/shift_history").once("value", (snapshot) => {
-              const firebaseHistory = snapshot.val()
-              if (firebaseHistory) {
-                Object.keys(firebaseHistory).forEach((key) => {
-                  if (firebaseHistory[key].id == id) {
-                    database.ref(`popsey/shift_history/${key}`).remove()
-                  }
-                })
-              }
-            })
+            database
+              .ref(`popsey/shift_history/${id}`)
+              .remove()
+              .then(() => console.log("History item deleted from Firebase:", id))
+              .catch((error) => console.error("Error removing from Firebase:", error))
           } catch (error) {
             console.error("Error removing from Firebase:", error)
           }
