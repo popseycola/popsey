@@ -809,7 +809,7 @@
             // Re-enable sync after a shorter delay for faster real-time updates
             setTimeout(() => {
               isFirebaseSyncPaused = false
-            }, 1000) // Reduced from 2000ms
+            }, 500) // Reduced from 1000ms for faster delete sync
           })
           .catch((error) => {
             console.error("Firebase real-time save error:", error)
@@ -1855,14 +1855,17 @@
           })
         }
 
-        // Delete button
+        // Delete button with immediate sync
         const deleteBtn = row.querySelector(".expense-delete-btn")
         if (deleteBtn) {
           deleteBtn.addEventListener("click", () => {
             if (window.confirm("Are you sure you want to delete this expense?")) {
               row.remove()
               expenseRows = expenseRows.filter((r) => r !== row)
-              triggerAutoSave("delete_expense_row", true) // Immediate save
+
+              // IMMEDIATE Firebase sync for deletions
+              updateDashboardValues()
+              saveCompleteState()
               console.log(`Expense row deleted. Total rows: ${expenseRows.length}`)
             }
           })
@@ -1894,6 +1897,7 @@
     function updateDashboardValues() {
       try {
         // Calculate billiard total paid
+
         let billiardPaid = 0
         document.querySelectorAll("#billiardTbody tr").forEach((tr) => {
           const paidElement = tr.querySelector(".paid-value")
@@ -2162,7 +2166,7 @@
           addBilliardRowBtn.addEventListener("click", addBilliardRow)
         }
 
-        // Row delete logic with confirm and delay
+        // Row delete logic with immediate sync
         let delRowLocked = false
         const billiardTbody = document.getElementById("billiardTbody")
         if (billiardTbody) {
@@ -2177,11 +2181,15 @@
                   // Remove from billiardRows array
                   billiardRows = billiardRows.filter((row) => row !== tr)
                   filterBilliardRows()
-                  triggerAutoSave("delete_billiard_row", true) // Immediate save
+
+                  // IMMEDIATE Firebase sync for deletions
+                  updateDashboardValues()
+                  saveCompleteState()
+                  console.log(`Billiard row deleted. Total rows: ${billiardRows.length}`)
                 }
                 setTimeout(() => {
                   delRowLocked = false
-                }, 350)
+                }, 200) // Reduced delay
               }
             }
           })
@@ -2193,7 +2201,7 @@
           addGroceryRowBtn.addEventListener("click", addGroceryRow)
         }
 
-        // Grocery row delete logic with confirm and delay
+        // Grocery row delete logic with immediate sync
         let delGroceryRowLocked = false
         const groceryTbody = document.getElementById("groceryTbody")
         if (groceryTbody) {
@@ -2207,11 +2215,15 @@
                   tr.remove()
                   // Remove from groceryRows array
                   groceryRows = groceryRows.filter((row) => row !== tr)
-                  triggerAutoSave("delete_grocery_row", true) // Immediate save
+
+                  // IMMEDIATE Firebase sync for deletions
+                  updateDashboardValues()
+                  saveCompleteState()
+                  console.log(`Grocery row deleted. Total rows: ${groceryRows.length}`)
                 }
                 setTimeout(() => {
                   delGroceryRowLocked = false
-                }, 350)
+                }, 200) // Reduced delay
               }
             }
           })
@@ -2889,10 +2901,10 @@
 
         console.log("Setting up real-time Firebase synchronization...")
 
-        // Listen for real-time updates to complete state with improved logic
+        // Listen for real-time updates to complete state with improved deletion detection
         database.ref("popsey/complete_state").on("value", (snapshot) => {
           try {
-            if (isFirebaseSyncPaused || isInitialLoad) return // Prevent processing during our own saves or initial load
+            if (isFirebaseSyncPaused || isInitialLoad) return
 
             const remoteState = snapshot.val()
             if (remoteState && remoteState.timestamp) {
@@ -2900,22 +2912,27 @@
               let shouldUpdate = false
 
               if (!localState) {
-                // No local data, use remote data
                 shouldUpdate = true
                 console.log("No local data found, syncing from Firebase...")
               } else {
                 const localData = JSON.parse(localState)
-                // Only update if remote data is significantly newer (more than 2 seconds)
-                // AND has more data than local
                 const timeDiff = remoteState.timestamp - (localData.timestamp || 0)
-                const hasMoreData =
-                  remoteState.billiardRowsCount + remoteState.groceryRowsCount + remoteState.expenseRowsCount >=
-                  localData.billiardRowsCount + localData.groceryRowsCount + localData.expenseRowsCount
 
-                shouldUpdate = timeDiff > 2000 && hasMoreData && remoteState.timestamp > lastSaveTimestamp
+                // Check for deletions (remote has fewer rows)
+                const remoteTotal =
+                  remoteState.billiardRowsCount + remoteState.groceryRowsCount + remoteState.expenseRowsCount
+                const localTotal = localData.billiardRowsCount + localData.groceryRowsCount + localData.expenseRowsCount
+                const hasFewerRows = remoteTotal < localTotal
+
+                // Update if: newer timestamp AND (has more/equal data OR has fewer rows indicating deletion)
+                shouldUpdate =
+                  timeDiff > 1000 &&
+                  remoteState.timestamp > lastSaveTimestamp &&
+                  (remoteTotal >= localTotal || hasFewerRows)
 
                 if (shouldUpdate) {
-                  console.log(`Remote data is newer (${timeDiff}ms) and has more/equal data, syncing...`)
+                  const action = hasFewerRows ? "deletion" : "addition/update"
+                  console.log(`Remote ${action} detected (${timeDiff}ms newer), syncing...`)
                 }
               }
 
@@ -2923,14 +2940,12 @@
                 console.log("Syncing remote data to local...")
                 localStorage.setItem("popsey_complete_state", JSON.stringify(remoteState))
 
-                // Pause local sync to prevent loops
                 isFirebaseSyncPaused = true
                 loadCompleteStateFromData(remoteState)
 
-                // Re-enable after processing
                 setTimeout(() => {
                   isFirebaseSyncPaused = false
-                }, 2000)
+                }, 1500) // Reduced delay for faster sync
               }
             }
           } catch (error) {
