@@ -7,6 +7,138 @@ body {
   color: #222b3a;
 }
 
+/* Login Screen Styles */
+.login-screen {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(135deg, #43cea2 0%, #185a9d 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+}
+
+.login-container {
+  background: #fff;
+  padding: 40px;
+  border-radius: 15px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+  width: 100%;
+  max-width: 400px;
+  text-align: center;
+}
+
+.login-header h1 {
+  color: #43cea2;
+  font-size: 32px;
+  font-weight: 700;
+  margin: 0 0 10px 0;
+  letter-spacing: 1px;
+}
+
+.login-header p {
+  color: #666;
+  font-size: 16px;
+  margin: 0 0 30px 0;
+}
+
+.login-form {
+  text-align: left;
+}
+
+.form-group {
+  margin-bottom: 20px;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 600;
+  color: #222b3a;
+  font-size: 14px;
+}
+
+.form-group input {
+  width: 100%;
+  padding: 12px 15px;
+  border: 2px solid #e3e7ed;
+  border-radius: 8px;
+  font-size: 16px;
+  transition: border-color 0.3s ease;
+  box-sizing: border-box;
+}
+
+.form-group input:focus {
+  outline: none;
+  border-color: #43cea2;
+  box-shadow: 0 0 0 3px rgba(67, 206, 162, 0.1);
+}
+
+.login-btn {
+  width: 100%;
+  padding: 12px;
+  background: #43cea2;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.3s ease;
+  margin-top: 10px;
+}
+
+.login-btn:hover {
+  background: #369870;
+}
+
+.login-btn:active {
+  transform: translateY(1px);
+}
+
+.login-error {
+  background: #fdeaea;
+  color: #dc3545;
+  padding: 10px;
+  border-radius: 5px;
+  margin-top: 15px;
+  font-size: 14px;
+  text-align: center;
+  border: 1px solid #f5c6cb;
+}
+
+/* Main Dashboard Styles */
+.main-dashboard {
+  min-height: 100vh;
+}
+
+.logout-container {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 1000;
+}
+
+.logout-btn {
+  padding: 8px 16px;
+  background: #dc3545;
+  color: #fff;
+  border: none;
+  border-radius: 5px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.3s ease;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.logout-btn:hover {
+  background: #b21f2d;
+}
+
 h1,
 h2 {
   text-align: center;
@@ -23,6 +155,7 @@ h2 {
   justify-content: center;
   margin-bottom: 24px;
   flex-wrap: wrap;
+  margin-top: 60px; /* Add space for logout button */
 }
 
 .tab-btn {
@@ -695,6 +828,23 @@ button.mode-btn[data-mode="hour"] {
   .billiard-filters {
     flex-direction: column;
     align-items: center;
+  }
+
+  .login-container {
+    margin: 20px;
+    padding: 30px;
+  }
+
+  .logout-container {
+    position: relative;
+    top: auto;
+    right: auto;
+    text-align: center;
+    margin-bottom: 20px;
+  }
+
+  .tabs {
+    margin-top: 20px;
   }
 }
 

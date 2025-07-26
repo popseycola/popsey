@@ -16,6 +16,153 @@
     let storage = null
     let firebaseInitialized = false
 
+    // --- Authentication System ---
+    const VALID_USERNAME = "popseyadmin"
+    const VALID_PASSWORD = "bnrpopsey0308"
+    const LOGIN_SESSION_KEY = "popsey_login_session"
+    const SESSION_DURATION = 24 * 60 * 60 * 1000 // 24 hours in milliseconds
+
+    function checkLoginStatus() {
+      try {
+        const loginSession = localStorage.getItem(LOGIN_SESSION_KEY)
+        if (loginSession) {
+          const sessionData = JSON.parse(loginSession)
+          const currentTime = Date.now()
+
+          // Check if session is still valid (within 24 hours)
+          if (currentTime - sessionData.timestamp < SESSION_DURATION) {
+            showMainDashboard()
+            return true
+          } else {
+            // Session expired, remove it
+            localStorage.removeItem(LOGIN_SESSION_KEY)
+          }
+        }
+
+        showLoginScreen()
+        return false
+      } catch (error) {
+        console.error("Error checking login status:", error)
+        showLoginScreen()
+        return false
+      }
+    }
+
+    function showLoginScreen() {
+      try {
+        const loginScreen = document.getElementById("loginScreen")
+        const mainDashboard = document.getElementById("mainDashboard")
+
+        if (loginScreen) loginScreen.style.display = "flex"
+        if (mainDashboard) mainDashboard.style.display = "none"
+      } catch (error) {
+        console.error("Error showing login screen:", error)
+      }
+    }
+
+    function showMainDashboard() {
+      try {
+        const loginScreen = document.getElementById("loginScreen")
+        const mainDashboard = document.getElementById("mainDashboard")
+
+        if (loginScreen) loginScreen.style.display = "none"
+        if (mainDashboard) mainDashboard.style.display = "block"
+      } catch (error) {
+        console.error("Error showing main dashboard:", error)
+      }
+    }
+
+    function handleLogin(event) {
+      try {
+        event.preventDefault()
+
+        const username = document.getElementById("username").value.trim()
+        const password = document.getElementById("password").value
+        const errorDiv = document.getElementById("loginError")
+
+        if (username === VALID_USERNAME && password === VALID_PASSWORD) {
+          // Save login session
+          const sessionData = {
+            username: username,
+            timestamp: Date.now(),
+          }
+          localStorage.setItem(LOGIN_SESSION_KEY, JSON.stringify(sessionData))
+
+          // Hide error and show dashboard
+          if (errorDiv) errorDiv.style.display = "none"
+          showMainDashboard()
+
+          // Initialize the main application after showing dashboard
+          setTimeout(() => {
+            initializePage()
+          }, 100)
+
+          console.log("Login successful")
+        } else {
+          // Show error message
+          if (errorDiv) {
+            errorDiv.textContent = "Invalid username or password. Please try again."
+            errorDiv.style.display = "block"
+          }
+
+          // Clear password field
+          document.getElementById("password").value = ""
+
+          console.log("Login failed")
+        }
+      } catch (error) {
+        console.error("Error handling login:", error)
+      }
+    }
+
+    function handleLogout() {
+      try {
+        if (confirm("Are you sure you want to logout?")) {
+          // Remove login session
+          localStorage.removeItem(LOGIN_SESSION_KEY)
+
+          // Show login screen
+          showLoginScreen()
+
+          // Clear form fields
+          document.getElementById("username").value = ""
+          document.getElementById("password").value = ""
+
+          console.log("Logout successful")
+        }
+      } catch (error) {
+        console.error("Error handling logout:", error)
+      }
+    }
+
+    function setupAuthenticationListeners() {
+      try {
+        // Login form submission
+        const loginForm = document.getElementById("loginForm")
+        if (loginForm) {
+          loginForm.addEventListener("submit", handleLogin)
+        }
+
+        // Logout button
+        const logoutBtn = document.getElementById("logoutBtn")
+        if (logoutBtn) {
+          logoutBtn.addEventListener("click", handleLogout)
+        }
+
+        // Enter key on password field
+        const passwordField = document.getElementById("password")
+        if (passwordField) {
+          passwordField.addEventListener("keypress", (e) => {
+            if (e.key === "Enter") {
+              handleLogin(e)
+            }
+          })
+        }
+      } catch (error) {
+        console.error("Error setting up authentication listeners:", error)
+      }
+    }
+
     // Check online status safely
     try {
       isOnline = navigator.onLine
@@ -2497,10 +2644,29 @@
     }
 
     // Initialize when DOM is ready
+    function startApplication() {
+      try {
+        // Set up authentication listeners first
+        setupAuthenticationListeners()
+
+        // Check login status
+        const isLoggedIn = checkLoginStatus()
+
+        // If logged in, initialize the main application
+        if (isLoggedIn) {
+          initializePage()
+        }
+      } catch (error) {
+        console.error("Critical error in application startup:", error)
+        alert("There was an error loading the application. Please refresh the page and try again.")
+      }
+    }
+
+    // Start the application
     if (document.readyState === "loading") {
-      document.addEventListener("DOMContentLoaded", initializePage)
+      document.addEventListener("DOMContentLoaded", startApplication)
     } else {
-      initializePage()
+      startApplication()
     }
   } catch (error) {
     console.error("Critical error in script initialization:", error)

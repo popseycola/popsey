@@ -10,236 +10,266 @@
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-storage-compat.js"></script>
 </head>
 <body>
-  <div class="tabs">
-    <button class="tab-btn active" data-tab="dashboard">Main Dashboard</button>
-    <button class="tab-btn" data-tab="billiard">Billiard</button>
-    <button class="tab-btn" data-tab="grocery">Grocery</button>
-    <button class="tab-btn" data-tab="expense">Expense</button>
-  </div>
-  <div class="tab-content" id="dashboard">
-    <h2>Main Dashboard</h2>
-    <div class="dashboard-datetime">
-      <div class="dashboard-date" id="dashboard-date-text"></div>
-      <div class="dashboard-time" id="dashboard-live-time"></div>
-      <div style="font-size:18px; color:#43cea2; font-weight:600;">Welcome, Popsey!</div>
-      <div style="font-size:14px; margin-top:8px;">
-        <span id="connection-status" style="color:#43cea2;">🟢 Online</span>
-        <span id="sync-status" style="margin-left:10px; color:#888;">✓ Synced</span>
-        <span id="last-save" style="margin-left:10px; color:#666; font-size:12px;">Last saved: Never</span>
+  <!-- Login Screen -->
+  <div id="loginScreen" class="login-screen">
+    <div class="login-container">
+      <div class="login-header">
+        <h1>POPSEY System</h1>
+        <p>Please login to access the dashboard</p>
       </div>
-    </div>
-    <div style="display:flex; gap:24px; justify-content:center; margin-bottom:24px; flex-wrap: wrap;">
-      <div class="dashboard-card">
-        <div class="dashboard-label">Billiard Total Paid</div>
-        <div class="dashboard-value" id="dashboard-billiard-paid">0.00</div>
-      </div>
-      <div class="dashboard-card">
-        <div class="dashboard-label">Grocery Total</div>
-        <div class="dashboard-value" id="dashboard-grocery-total">0.00</div>
-      </div>
-      <div class="dashboard-card">
-        <div class="dashboard-label">Expense Total</div>
-        <div class="dashboard-value" id="dashboard-expense-total">0.00</div>
-      </div>
-      <div class="dashboard-card">
-        <div class="dashboard-label">Combined Total</div>
-        <div class="dashboard-value" id="dashboard-combined-total">0.00</div>
-      </div>
-    </div>
-    <div style="text-align:center; margin-bottom:18px;">
-      <button id="endShiftBtn" style="padding:10px 28px; font-size:17px; font-weight:700; border-radius:7px; background:#43cea2; color:#fff; border:none; cursor:pointer; margin-right:10px;">End Shift & Reset</button>
-      <button id="exportCurrentBtn" style="padding:10px 28px; font-size:17px; font-weight:700; border-radius:7px; background:#007bff; color:#fff; border:none; cursor:pointer; margin-right:10px;">Export Current Data</button>
-      <button id="loadDataBtn" style="padding:10px 28px; font-size:17px; font-weight:700; border-radius:7px; background:#28a745; color:#fff; border:none; cursor:pointer;">Load Saved Data</button>
-    </div>
-    
-    <!-- Shift History Section -->
-    <div style="text-align:center; margin-bottom:16px;">
-      <h3 style="color:#43cea2; font-weight:600;">Shift History</h3>
-      <button id="clearHistoryBtn" style="padding:8px 16px; font-size:14px; font-weight:600; border-radius:5px; background:#dc3545; color:#fff; border:none; cursor:pointer; margin-bottom:10px;">Clear All History</button>
-    </div>
-    
-    <table id="dashboardHistoryTable">
-      <thead>
-        <tr>
-          <th>Date & Time</th>
-          <th>Billiard Paid</th>
-          <th>Grocery Total</th>
-          <th>Expense Total</th>
-          <th>Combined Total</th>
-          <th>Actions</th>
-        </tr>
-      </thead>
-      <tbody id="dashboardHistoryTbody">
-        <!-- Filled by JS -->
-      </tbody>
-    </table>
-  </div>
-  <div class="tab-content" id="billiard">
-    <h2>Billiard Transactions</h2>
-    <div class="billiard-filters">
-      <button class="billiard-filter-btn active" data-filter="all">All</button>
-      <button class="billiard-filter-btn" data-filter="m8">M8</button>
-      <button class="billiard-filter-btn" data-filter="m7">M7</button>
-      <button class="billiard-filter-btn" data-filter="alpha">Alpha</button>
-      <button class="billiard-filter-btn" data-filter="regal">Regal</button>
-      <button class="billiard-filter-btn" data-filter="paid">Paid</button>
-      <button class="billiard-filter-btn" data-filter="unpaid">Unpaid</button>
-      <button class="billiard-filter-btn" data-filter="active">Active</button>
-      <button class="billiard-filter-btn" data-filter="done">Done</button>
-    </div>
-    <table id="billiardTable">
-      <thead>
-        <tr>
-          <th>Active</th>
-          <th>Status</th>
-          <th>Billiard Table</th>
-          <th>Amount</th>
-          <th>Number of Games</th>
-          <th>Total</th>
-          <th>Paid</th>
-          <th>Total Paid</th>
-          <th>Balance</th>
-          <th>Name</th>
-        </tr>
-      </thead>
-      <tbody id="billiardTbody">
-        <tr>
-          <td>
-            <button class="active-switch-btn" data-active="true">Active</button>
-          </td>
-          <td class="status status-unpaid">Unpaid</td>
-          <td>
-            <select class="tableType">
-              <option value="m8">M8</option>
-              <option value="m7">M7</option>
-              <option value="alpha">Alpha</option>
-              <option value="regal">Regal</option>
-            </select>
-            <button class="mode-btn" data-mode="mesada">Mesada</button>
-          </td>
-          <td><input type="number" class="amount" value="15" readonly></td>
-          <td>
-            <span class="games-value">0</span>
-            <div class="games-tally" style="display:inline-block;vertical-align:middle;"></div>
-            <button class="add-game-btn">Add</button>
-            <button class="delete-game-btn">Delete</button>
-          </td>
-          <td class="total">0</td>
-          <td>
-            <span class="paid-value">0</span>
-            <input type="number" class="paid-input" value="0" min="0" style="width:60px;">
-            <button class="add-paid-btn">Add</button>
-            <div class="paid-history"></div>
-          </td>
-          <td class="totalPaid">0</td>
-          <td class="balance">0</td>
-          <td><input type="text" class="name"></td>
-        </tr>
-      </tbody>
-    </table>
-    <button id="addBilliardRow">Add Row</button>
-  </div>
-  <div class="tab-content" id="grocery" style="display:none;">
-    <h2>Grocery Transactions</h2>
-    <div style="margin-bottom:16px; text-align:center;">
-      <input type="text" id="grocerySearch" placeholder="Search table/name or item..." style="width:220px; padding:8px; border-radius:5px; border:1px solid #b0b8c1; font-size:15px;">
-    </div>
-    <div class="grocery-filters">
-      <button class="grocery-filter-btn active" data-filter="all">All</button>
-      <button class="grocery-filter-btn" data-filter="purchase">Purchase</button>
-      <button class="grocery-filter-btn" data-filter="paid">Paid</button>
-      <button class="grocery-filter-btn" data-filter="unpaid">Unpaid</button>
-    </div>
-    <table id="groceryTable">
-      <thead>
-        <tr>
-          <th>STATUS</th>
-          <th>TABLE/NAME</th>
-          <th>ITEM</th>
-          <th>AMOUNT</th>
-          <th>NO. OF PURCHASES</th>
-          <th>TOTAL ITEMS</th>
-          <th>TOTAL</th>
-          <th>ACTION</th>
-        </tr>
-      </thead>
-      <tbody id="groceryTbody">
-        <tr>
-          <td class="grocery-status-cell"><span class="grocery-status grocery-purchase">Purchase</span></td>
-          <td><input type="text" class="grocery-table"></td>
-          <td><input type="text" class="grocery-item"></td>
-          <td><input type="number" class="grocery-amount" value="0"></td>
-          <td>
-            <span class="grocery-purchases-value">0</span>
-            <input type="number" class="grocery-purchases-input" value="1" min="1" style="width:50px;">
-            <button class="grocery-add-purchase-btn">Add</button>
-            <button class="grocery-delete-purchase-btn">Delete</button>
-          </td>
-          <td class="grocery-total-items">0</td>
-          <td class="grocery-total">0</td>
-          <td>
-            <button class="grocery-delete-row-btn" title="Delete Row">Delete</button>
-          </td>
-        </tr>
-      </tbody>
-    </table>
-    <button id="addGroceryRow">Add Row</button>
-  </div>
-
-  <!-- New Expense Tab -->
-  <div class="tab-content" id="expense" style="display:none;">
-    <h2>Expense Transactions</h2>
-    <div style="text-align:center; margin-bottom:16px;">
-      <button id="addExpenseBtn" style="padding:10px 24px; background:#43cea2; color:#fff; border:none; border-radius:7px; font-size:16px; font-weight:700; cursor:pointer;">Add Expense</button>
-    </div>
-    <table id="expenseTable">
-      <thead>
-        <tr>
-          <th>EXPENSE</th>
-          <th>AMOUNT</th>
-          <th>ACTION</th>
-        </tr>
-      </thead>
-      <tbody id="expenseTbody">
-        <!-- Expense rows will be added dynamically -->
-      </tbody>
-    </table>
-  </div>
-
-  <!-- Expense Modal -->
-  <div id="expenseModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:1000;">
-    <div style="position:absolute; top:50%; left:50%; transform:translate(-50%, -50%); background:#fff; padding:30px; border-radius:10px; box-shadow:0 4px 16px rgba(0,0,0,0.2); width:400px; max-width:90%;">
-      <h3 style="margin-top:0; color:#43cea2; text-align:center;">Add New Expense</h3>
-      <div style="margin-bottom:20px;">
-        <label style="display:block; margin-bottom:8px; font-weight:600; color:#222b3a;">Expense:</label>
-        <input type="text" id="expenseNameInput" placeholder="Enter expense name..." style="width:100%; padding:10px; border:1px solid #b0b8c1; border-radius:5px; font-size:14px;">
-      </div>
-      <div style="margin-bottom:20px;">
-        <label style="display:block; margin-bottom:8px; font-weight:600; color:#222b3a;">Amount:</label>
-        <input type="number" id="expenseAmountInput" placeholder="0.00" min="0" step="0.01" style="width:100%; padding:10px; border:1px solid #b0b8c1; border-radius:5px; font-size:14px;">
-      </div>
-      <div style="text-align:center; gap:10px; display:flex; justify-content:center;">
-        <button id="saveExpenseBtn" style="padding:10px 20px; background:#43cea2; color:#fff; border:none; border-radius:5px; font-weight:600; cursor:pointer; margin-right:10px;">Add Expense</button>
-        <button id="cancelExpenseBtn" style="padding:10px 20px; background:#dc3545; color:#fff; border:none; border-radius:5px; font-weight:600; cursor:pointer;">Cancel</button>
-      </div>
+      <form id="loginForm" class="login-form">
+        <div class="form-group">
+          <label for="username">Username:</label>
+          <input type="text" id="username" name="username" required autocomplete="username">
+        </div>
+        <div class="form-group">
+          <label for="password">Password:</label>
+          <input type="password" id="password" name="password" required autocomplete="current-password">
+        </div>
+        <button type="submit" class="login-btn">Login</button>
+        <div id="loginError" class="login-error" style="display: none;"></div>
+      </form>
     </div>
   </div>
 
-  <!-- Edit Expense Modal -->
-  <div id="editExpenseModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:1000;">
-    <div style="position:absolute; top:50%; left:50%; transform:translate(-50%, -50%); background:#fff; padding:30px; border-radius:10px; box-shadow:0 4px 16px rgba(0,0,0,0.2); width:400px; max-width:90%;">
-      <h3 style="margin-top:0; color:#43cea2; text-align:center;">Edit Expense</h3>
-      <div style="margin-bottom:20px;">
-        <label style="display:block; margin-bottom:8px; font-weight:600; color:#222b3a;">Expense:</label>
-        <input type="text" id="editExpenseNameInput" placeholder="Enter expense name..." style="width:100%; padding:10px; border:1px solid #b0b8c1; border-radius:5px; font-size:14px;">
+  <!-- Main Dashboard (hidden by default) -->
+  <div id="mainDashboard" class="main-dashboard" style="display: none;">
+    <!-- Logout Button -->
+    <div class="logout-container">
+      <button id="logoutBtn" class="logout-btn">Logout</button>
+    </div>
+
+    <div class="tabs">
+      <button class="tab-btn active" data-tab="dashboard">Main Dashboard</button>
+      <button class="tab-btn" data-tab="billiard">Billiard</button>
+      <button class="tab-btn" data-tab="grocery">Grocery</button>
+      <button class="tab-btn" data-tab="expense">Expense</button>
+    </div>
+    <div class="tab-content" id="dashboard">
+      <h2>Main Dashboard</h2>
+      <div class="dashboard-datetime">
+        <div class="dashboard-date" id="dashboard-date-text"></div>
+        <div class="dashboard-time" id="dashboard-live-time"></div>
+        <div style="font-size:18px; color:#43cea2; font-weight:600;">Welcome, Popsey!</div>
+        <div style="font-size:14px; margin-top:8px;">
+          <span id="connection-status" style="color:#43cea2;">🟢 Online</span>
+          <span id="sync-status" style="margin-left:10px; color:#888;">✓ Synced</span>
+          <span id="last-save" style="margin-left:10px; color:#666; font-size:12px;">Last saved: Never</span>
+        </div>
       </div>
-      <div style="margin-bottom:20px;">
-        <label style="display:block; margin-bottom:8px; font-weight:600; color:#222b3a;">Amount:</label>
-        <input type="number" id="editExpenseAmountInput" placeholder="0.00" min="0" step="0.01" style="width:100%; padding:10px; border:1px solid #b0b8c1; border-radius:5px; font-size:14px;">
+      <div style="display:flex; gap:24px; justify-content:center; margin-bottom:24px; flex-wrap: wrap;">
+        <div class="dashboard-card">
+          <div class="dashboard-label">Billiard Total Paid</div>
+          <div class="dashboard-value" id="dashboard-billiard-paid">0.00</div>
+        </div>
+        <div class="dashboard-card">
+          <div class="dashboard-label">Grocery Total</div>
+          <div class="dashboard-value" id="dashboard-grocery-total">0.00</div>
+        </div>
+        <div class="dashboard-card">
+          <div class="dashboard-label">Expense Total</div>
+          <div class="dashboard-value" id="dashboard-expense-total">0.00</div>
+        </div>
+        <div class="dashboard-card">
+          <div class="dashboard-label">Combined Total</div>
+          <div class="dashboard-value" id="dashboard-combined-total">0.00</div>
+        </div>
       </div>
-      <div style="text-align:center; gap:10px; display:flex; justify-content:center;">
-        <button id="updateExpenseBtn" style="padding:10px 20px; background:#43cea2; color:#fff; border:none; border-radius:5px; font-weight:600; cursor:pointer; margin-right:10px;">Update</button>
-        <button id="cancelEditExpenseBtn" style="padding:10px 20px; background:#dc3545; color:#fff; border:none; border-radius:5px; font-weight:600; cursor:pointer;">Cancel</button>
+      <div style="text-align:center; margin-bottom:18px;">
+        <button id="endShiftBtn" style="padding:10px 28px; font-size:17px; font-weight:700; border-radius:7px; background:#43cea2; color:#fff; border:none; cursor:pointer; margin-right:10px;">End Shift & Reset</button>
+        <button id="exportCurrentBtn" style="padding:10px 28px; font-size:17px; font-weight:700; border-radius:7px; background:#007bff; color:#fff; border:none; cursor:pointer; margin-right:10px;">Export Current Data</button>
+        <button id="loadDataBtn" style="padding:10px 28px; font-size:17px; font-weight:700; border-radius:7px; background:#28a745; color:#fff; border:none; cursor:pointer;">Load Saved Data</button>
+      </div>
+      
+      <!-- Shift History Section -->
+      <div style="text-align:center; margin-bottom:16px;">
+        <h3 style="color:#43cea2; font-weight:600;">Shift History</h3>
+        <button id="clearHistoryBtn" style="padding:8px 16px; font-size:14px; font-weight:600; border-radius:5px; background:#dc3545; color:#fff; border:none; cursor:pointer; margin-bottom:10px;">Clear All History</button>
+      </div>
+      
+      <table id="dashboardHistoryTable">
+        <thead>
+          <tr>
+            <th>Date & Time</th>
+            <th>Billiard Paid</th>
+            <th>Grocery Total</th>
+            <th>Expense Total</th>
+            <th>Combined Total</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="dashboardHistoryTbody">
+          <!-- Filled by JS -->
+        </tbody>
+      </table>
+    </div>
+    <div class="tab-content" id="billiard">
+      <h2>Billiard Transactions</h2>
+      <div class="billiard-filters">
+        <button class="billiard-filter-btn active" data-filter="all">All</button>
+        <button class="billiard-filter-btn" data-filter="m8">M8</button>
+        <button class="billiard-filter-btn" data-filter="m7">M7</button>
+        <button class="billiard-filter-btn" data-filter="alpha">Alpha</button>
+        <button class="billiard-filter-btn" data-filter="regal">Regal</button>
+        <button class="billiard-filter-btn" data-filter="paid">Paid</button>
+        <button class="billiard-filter-btn" data-filter="unpaid">Unpaid</button>
+        <button class="billiard-filter-btn" data-filter="active">Active</button>
+        <button class="billiard-filter-btn" data-filter="done">Done</button>
+      </div>
+      <table id="billiardTable">
+        <thead>
+          <tr>
+            <th>Active</th>
+            <th>Status</th>
+            <th>Billiard Table</th>
+            <th>Amount</th>
+            <th>Number of Games</th>
+            <th>Total</th>
+            <th>Paid</th>
+            <th>Total Paid</th>
+            <th>Balance</th>
+            <th>Name</th>
+          </tr>
+        </thead>
+        <tbody id="billiardTbody">
+          <tr>
+            <td>
+              <button class="active-switch-btn" data-active="true">Active</button>
+            </td>
+            <td class="status status-unpaid">Unpaid</td>
+            <td>
+              <select class="tableType">
+                <option value="m8">M8</option>
+                <option value="m7">M7</option>
+                <option value="alpha">Alpha</option>
+                <option value="regal">Regal</option>
+              </select>
+              <button class="mode-btn" data-mode="mesada">Mesada</button>
+            </td>
+            <td><input type="number" class="amount" value="15" readonly></td>
+            <td>
+              <span class="games-value">0</span>
+              <div class="games-tally" style="display:inline-block;vertical-align:middle;"></div>
+              <button class="add-game-btn">Add</button>
+              <button class="delete-game-btn">Delete</button>
+            </td>
+            <td class="total">0</td>
+            <td>
+              <span class="paid-value">0</span>
+              <input type="number" class="paid-input" value="0" min="0" style="width:60px;">
+              <button class="add-paid-btn">Add</button>
+              <div class="paid-history"></div>
+            </td>
+            <td class="totalPaid">0</td>
+            <td class="balance">0</td>
+            <td><input type="text" class="name"></td>
+          </tr>
+        </tbody>
+      </table>
+      <button id="addBilliardRow">Add Row</button>
+    </div>
+    <div class="tab-content" id="grocery" style="display:none;">
+      <h2>Grocery Transactions</h2>
+      <div style="margin-bottom:16px; text-align:center;">
+        <input type="text" id="grocerySearch" placeholder="Search table/name or item..." style="width:220px; padding:8px; border-radius:5px; border:1px solid #b0b8c1; font-size:15px;">
+      </div>
+      <div class="grocery-filters">
+        <button class="grocery-filter-btn active" data-filter="all">All</button>
+        <button class="grocery-filter-btn" data-filter="purchase">Purchase</button>
+        <button class="grocery-filter-btn" data-filter="paid">Paid</button>
+        <button class="grocery-filter-btn" data-filter="unpaid">Unpaid</button>
+      </div>
+      <table id="groceryTable">
+        <thead>
+          <tr>
+            <th>STATUS</th>
+            <th>TABLE/NAME</th>
+            <th>ITEM</th>
+            <th>AMOUNT</th>
+            <th>NO. OF PURCHASES</th>
+            <th>TOTAL ITEMS</th>
+            <th>TOTAL</th>
+            <th>ACTION</th>
+          </tr>
+        </thead>
+        <tbody id="groceryTbody">
+          <tr>
+            <td class="grocery-status-cell"><span class="grocery-status grocery-purchase">Purchase</span></td>
+            <td><input type="text" class="grocery-table"></td>
+            <td><input type="text" class="grocery-item"></td>
+            <td><input type="number" class="grocery-amount" value="0"></td>
+            <td>
+              <span class="grocery-purchases-value">0</span>
+              <input type="number" class="grocery-purchases-input" value="1" min="1" style="width:50px;">
+              <button class="grocery-add-purchase-btn">Add</button>
+              <button class="grocery-delete-purchase-btn">Delete</button>
+            </td>
+            <td class="grocery-total-items">0</td>
+            <td class="grocery-total">0</td>
+            <td>
+              <button class="grocery-delete-row-btn" title="Delete Row">Delete</button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+      <button id="addGroceryRow">Add Row</button>
+    </div>
+
+    <!-- New Expense Tab -->
+    <div class="tab-content" id="expense" style="display:none;">
+      <h2>Expense Transactions</h2>
+      <div style="text-align:center; margin-bottom:16px;">
+        <button id="addExpenseBtn" style="padding:10px 24px; background:#43cea2; color:#fff; border:none; border-radius:7px; font-size:16px; font-weight:700; cursor:pointer;">Add Expense</button>
+      </div>
+      <table id="expenseTable">
+        <thead>
+          <tr>
+            <th>EXPENSE</th>
+            <th>AMOUNT</th>
+            <th>ACTION</th>
+          </tr>
+        </thead>
+        <tbody id="expenseTbody">
+          <!-- Expense rows will be added dynamically -->
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Expense Modal -->
+    <div id="expenseModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:1000;">
+      <div style="position:absolute; top:50%; left:50%; transform:translate(-50%, -50%); background:#fff; padding:30px; border-radius:10px; box-shadow:0 4px 16px rgba(0,0,0,0.2); width:400px; max-width:90%;">
+        <h3 style="margin-top:0; color:#43cea2; text-align:center;">Add New Expense</h3>
+        <div style="margin-bottom:20px;">
+          <label style="display:block; margin-bottom:8px; font-weight:600; color:#222b3a;">Expense:</label>
+          <input type="text" id="expenseNameInput" placeholder="Enter expense name..." style="width:100%; padding:10px; border:1px solid #b0b8c1; border-radius:5px; font-size:14px;">
+        </div>
+        <div style="margin-bottom:20px;">
+          <label style="display:block; margin-bottom:8px; font-weight:600; color:#222b3a;">Amount:</label>
+          <input type="number" id="expenseAmountInput" placeholder="0.00" min="0" step="0.01" style="width:100%; padding:10px; border:1px solid #b0b8c1; border-radius:5px; font-size:14px;">
+        </div>
+        <div style="text-align:center; gap:10px; display:flex; justify-content:center;">
+          <button id="saveExpenseBtn" style="padding:10px 20px; background:#43cea2; color:#fff; border:none; border-radius:5px; font-weight:600; cursor:pointer; margin-right:10px;">Add Expense</button>
+          <button id="cancelExpenseBtn" style="padding:10px 20px; background:#dc3545; color:#fff; border:none; border-radius:5px; font-weight:600; cursor:pointer;">Cancel</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Edit Expense Modal -->
+    <div id="editExpenseModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:1000;">
+      <div style="position:absolute; top:50%; left:50%; transform:translate(-50%, -50%); background:#fff; padding:30px; border-radius:10px; box-shadow:0 4px 16px rgba(0,0,0,0.2); width:400px; max-width:90%;">
+        <h3 style="margin-top:0; color:#43cea2; text-align:center;">Edit Expense</h3>
+        <div style="margin-bottom:20px;">
+          <label style="display:block; margin-bottom:8px; font-weight:600; color:#222b3a;">Expense:</label>
+          <input type="text" id="editExpenseNameInput" placeholder="Enter expense name..." style="width:100%; padding:10px; border:1px solid #b0b8c1; border-radius:5px; font-size:14px;">
+        </div>
+        <div style="margin-bottom:20px;">
+          <label style="display:block; margin-bottom:8px; font-weight:600; color:#222b3a;">Amount:</label>
+          <input type="number" id="editExpenseAmountInput" placeholder="0.00" min="0" step="0.01" style="width:100%; padding:10px; border:1px solid #b0b8c1; border-radius:5px; font-size:14px;">
+        </div>
+        <div style="text-align:center; gap:10px; display:flex; justify-content:center;">
+          <button id="updateExpenseBtn" style="padding:10px 20px; background:#43cea2; color:#fff; border:none; border-radius:5px; font-weight:600; cursor:pointer; margin-right:10px;">Update</button>
+          <button id="cancelEditExpenseBtn" style="padding:10px 20px; background:#dc3545; color:#fff; border:none; border-radius:5px; font-weight:600; cursor:pointer;">Cancel</button>
+        </div>
       </div>
     </div>
   </div>
