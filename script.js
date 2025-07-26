@@ -12,6 +12,7 @@
     let currentEditingExpenseRow = null
     let isFirebaseSyncPaused = false // Prevent sync loops
     let lastSaveTimestamp = 0 // Prevent duplicate saves
+    let isInitialLoad = true // Track if this is the first load
 
     // Firebase variables - will be initialized later
     let database = null
@@ -818,11 +819,6 @@
         // Initialize Firebase after DOM is loaded
         initializeFirebase()
 
-        // Set up real-time synchronization with delay to prevent conflicts
-        setTimeout(() => {
-          initializeFirebaseSync()
-        }, 3000) // Increased delay
-
         // Set up initial tab visibility
         document.querySelectorAll(".tab-content").forEach((tab) => (tab.style.display = "none"))
         const dashboardTab = document.getElementById("dashboard")
@@ -869,6 +865,12 @@
         // Initial dashboard update and history load
         updateDashboardValues()
         loadShiftHistoryTable()
+
+        // FIXED: Set up Firebase sync AFTER initial load is complete
+        setTimeout(() => {
+          isInitialLoad = false // Mark initial load as complete
+          initializeFirebaseSync()
+        }, 2000) // Reduced delay and moved after initial load
 
         console.log("Page initialization complete")
       } catch (error) {
@@ -985,8 +987,10 @@
 
         filterBilliardRows()
 
-        // Trigger auto-save
-        triggerAutoSave("billiard_update")
+        // Trigger auto-save only if not during initial load or sync
+        if (!isInitialLoad && !isFirebaseSyncPaused) {
+          triggerAutoSave("billiard_update")
+        }
       } catch (error) {
         console.error("Error in updateBilliardRow:", error)
       }
@@ -1002,7 +1006,9 @@
           tableTypeEl.addEventListener("change", () => {
             updateBilliardRow(row)
             filterBilliardRows()
-            triggerAutoSave("billiard_table_change")
+            if (!isInitialLoad && !isFirebaseSyncPaused) {
+              triggerAutoSave("billiard_table_change")
+            }
           })
         }
 
@@ -1010,7 +1016,9 @@
         const nameEl = row.querySelector(".name")
         if (nameEl) {
           nameEl.addEventListener("input", () => {
-            triggerAutoSave("billiard_name_change")
+            if (!isInitialLoad && !isFirebaseSyncPaused) {
+              triggerAutoSave("billiard_name_change")
+            }
           })
         }
 
@@ -1038,7 +1046,9 @@
               }
 
               updateBilliardRow(row)
-              triggerAutoSave("billiard_mode_change")
+              if (!isInitialLoad && !isFirebaseSyncPaused) {
+                triggerAutoSave("billiard_mode_change")
+              }
             }
           })
         }
@@ -1056,7 +1066,9 @@
               const val = Number.parseInt(gamesValueEl.textContent) || 0
               gamesValueEl.textContent = val + 1
               updateBilliardRow(row)
-              triggerAutoSave("billiard_add_game")
+              if (!isInitialLoad && !isFirebaseSyncPaused) {
+                triggerAutoSave("billiard_add_game")
+              }
             }
 
             setTimeout(() => {
@@ -1079,7 +1091,9 @@
               const newVal = Math.max(0, val - 1)
               gamesValueEl.textContent = newVal
               updateBilliardRow(row)
-              triggerAutoSave("billiard_delete_game")
+              if (!isInitialLoad && !isFirebaseSyncPaused) {
+                triggerAutoSave("billiard_delete_game")
+              }
             }
 
             setTimeout(() => {
@@ -1104,7 +1118,9 @@
                 row._paidHistory.push(inputVal)
                 paidInputEl.value = 0
                 updateBilliardRow(row)
-                triggerAutoSave("billiard_add_payment")
+                if (!isInitialLoad && !isFirebaseSyncPaused) {
+                  triggerAutoSave("billiard_add_payment")
+                }
 
                 setTimeout(() => {
                   addPaidLocked = false
@@ -1127,7 +1143,9 @@
                   delPaidLocked = true
                   row._paidHistory.splice(idx, 1)
                   updateBilliardRow(row)
-                  triggerAutoSave("billiard_delete_payment")
+                  if (!isInitialLoad && !isFirebaseSyncPaused) {
+                    triggerAutoSave("billiard_delete_payment")
+                  }
 
                   setTimeout(() => {
                     delPaidLocked = false
@@ -1144,7 +1162,9 @@
           activeBtn.addEventListener("click", () => {
             row._isActive = !(row._isActive === true) // toggle between true/false
             updateBilliardRow(row)
-            triggerAutoSave("billiard_toggle_active")
+            if (!isInitialLoad && !isFirebaseSyncPaused) {
+              triggerAutoSave("billiard_toggle_active")
+            }
           })
         }
       } catch (error) {
@@ -1346,13 +1366,17 @@
               const newStatus = row._status === "Paid" ? "Unpaid" : "Paid"
               row._status = newStatus
               updateGroceryRow(row)
-              triggerAutoSave("grocery_status_change")
+              if (!isInitialLoad && !isFirebaseSyncPaused) {
+                triggerAutoSave("grocery_status_change")
+              }
             })
           }
         }
 
-        // Trigger auto-save
-        triggerAutoSave("grocery_update")
+        // Trigger auto-save only if not during initial load or sync
+        if (!isInitialLoad && !isFirebaseSyncPaused) {
+          triggerAutoSave("grocery_update")
+        }
 
         // Filter rows after update
         filterGroceryRows()
@@ -1375,7 +1399,9 @@
         if (amountEl) {
           amountEl.addEventListener("input", () => {
             updateGroceryRow(row)
-            triggerAutoSave("grocery_amount_change")
+            if (!isInitialLoad && !isFirebaseSyncPaused) {
+              triggerAutoSave("grocery_amount_change")
+            }
           })
         }
 
@@ -1389,7 +1415,9 @@
             }
             updateGroceryRow(row) // Update status based on table name
             filterGroceryRows() // Filter rows after table name change
-            triggerAutoSave("grocery_table_change")
+            if (!isInitialLoad && !isFirebaseSyncPaused) {
+              triggerAutoSave("grocery_table_change")
+            }
           })
         }
 
@@ -1401,7 +1429,9 @@
             if (value && !groceryRecallItems.includes(value)) {
               groceryRecallItems.push(value)
             }
-            triggerAutoSave("grocery_item_change")
+            if (!isInitialLoad && !isFirebaseSyncPaused) {
+              triggerAutoSave("grocery_item_change")
+            }
           })
         }
 
@@ -1421,7 +1451,9 @@
               row._purchases = (row._purchases || 0) + purchaseAmount
               purchasesValueEl.textContent = row._purchases
               updateGroceryRow(row)
-              triggerAutoSave("grocery_add_purchase")
+              if (!isInitialLoad && !isFirebaseSyncPaused) {
+                triggerAutoSave("grocery_add_purchase")
+              }
             }
 
             setTimeout(() => {
@@ -1446,7 +1478,9 @@
               row._purchases = Math.max(0, (row._purchases || 0) - purchaseAmount)
               purchasesValueEl.textContent = row._purchases
               updateGroceryRow(row)
-              triggerAutoSave("grocery_delete_purchase")
+              if (!isInitialLoad && !isFirebaseSyncPaused) {
+                triggerAutoSave("grocery_delete_purchase")
+              }
             }
 
             setTimeout(() => {
@@ -1762,8 +1796,10 @@
         if (expenseTotalEl) expenseTotalEl.textContent = expenseTotal.toFixed(2)
         if (combinedTotalEl) combinedTotalEl.textContent = combinedTotal.toFixed(2)
 
-        // Save complete state automatically
-        saveCompleteState()
+        // Save complete state automatically only if not during initial load or sync
+        if (!isInitialLoad && !isFirebaseSyncPaused) {
+          saveCompleteState()
+        }
       } catch (error) {
         console.error("Error updating dashboard values:", error)
       }
@@ -2707,30 +2743,44 @@
       }
     }
 
-    // --- FIXED: Enhanced Firebase Real-time Synchronization with Loop Prevention ---
+    // --- FIXED: Enhanced Firebase Real-time Synchronization with Better Logic ---
     function initializeFirebaseSync() {
       try {
         if (!firebaseInitialized || !database) return
 
         console.log("Setting up real-time Firebase synchronization...")
 
-        // Listen for real-time updates to complete state with loop prevention
+        // Listen for real-time updates to complete state with improved logic
         database.ref("popsey/complete_state").on("value", (snapshot) => {
           try {
-            if (isFirebaseSyncPaused) return // Prevent processing during our own saves
+            if (isFirebaseSyncPaused || isInitialLoad) return // Prevent processing during our own saves or initial load
 
             const remoteState = snapshot.val()
             if (remoteState && remoteState.timestamp) {
               const localState = localStorage.getItem("popsey_complete_state")
-              let shouldUpdate = true
+              let shouldUpdate = false
 
-              if (localState) {
+              if (!localState) {
+                // No local data, use remote data
+                shouldUpdate = true
+                console.log("No local data found, syncing from Firebase...")
+              } else {
                 const localData = JSON.parse(localState)
-                // Only update if remote data is significantly newer (more than 1 second)
-                shouldUpdate = remoteState.timestamp > (localData.timestamp || 0) + 1000
+                // Only update if remote data is significantly newer (more than 5 seconds)
+                // AND has more data than local
+                const timeDiff = remoteState.timestamp - (localData.timestamp || 0)
+                const hasMoreData =
+                  remoteState.billiardRowsCount + remoteState.groceryRowsCount + remoteState.expenseRowsCount >=
+                  localData.billiardRowsCount + localData.groceryRowsCount + localData.expenseRowsCount
+
+                shouldUpdate = timeDiff > 5000 && hasMoreData && remoteState.timestamp > lastSaveTimestamp
+
+                if (shouldUpdate) {
+                  console.log(`Remote data is newer (${timeDiff}ms) and has more/equal data, syncing...`)
+                }
               }
 
-              if (shouldUpdate && remoteState.timestamp > lastSaveTimestamp) {
+              if (shouldUpdate) {
                 console.log("Syncing remote data to local...")
                 localStorage.setItem("popsey_complete_state", JSON.stringify(remoteState))
 
@@ -2759,12 +2809,16 @@
     function loadCompleteStateFromData(state) {
       try {
         console.log("Loading state from Firebase sync...")
+        console.log(
+          `Remote state: ${state.billiardRowsCount || 0} billiard, ${state.groceryRowsCount || 0} grocery, ${state.expenseRowsCount || 0} expense rows`,
+        )
 
         // Clear existing tables
         clearAllTables()
 
         // Restore data without triggering saves
         if (state.billiardRows && state.billiardRows.length > 0) {
+          console.log(`Restoring ${state.billiardRows.length} billiard rows...`)
           state.billiardRows.forEach((rowData) => {
             const tr = createBilliardRowFromData(rowData)
             const tbody = document.getElementById("billiardTbody")
@@ -2776,6 +2830,7 @@
         }
 
         if (state.groceryRows && state.groceryRows.length > 0) {
+          console.log(`Restoring ${state.groceryRows.length} grocery rows...`)
           state.groceryRows.forEach((rowData) => {
             const tr = createGroceryRowFromData(rowData)
             const tbody = document.getElementById("groceryTbody")
@@ -2787,6 +2842,7 @@
         }
 
         if (state.expenseRows && state.expenseRows.length > 0) {
+          console.log(`Restoring ${state.expenseRows.length} expense rows...`)
           state.expenseRows.forEach((rowData) => {
             const tr = createExpenseRowFromData(rowData)
             const tbody = document.getElementById("expenseTbody")
@@ -2814,7 +2870,9 @@
         if (combinedTotalEl) combinedTotalEl.textContent = (state.combinedTotal || 0).toFixed(2)
 
         filterBilliardRows()
-        console.log("Firebase sync completed")
+        console.log(
+          `Firebase sync completed: ${billiardRows.length} billiard, ${groceryRows.length} grocery, ${expenseRows.length} expense rows restored`,
+        )
       } catch (error) {
         console.error("Error loading state from Firebase sync:", error)
       }
