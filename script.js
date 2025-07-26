@@ -10,6 +10,8 @@
     let groceryRecallTableNames = []
     let groceryRecallItems = []
     let currentEditingExpenseRow = null
+    let isFirebaseSyncPaused = false // Prevent sync loops
+    let lastSaveTimestamp = 0 // Prevent duplicate saves
 
     // Firebase variables - will be initialized later
     let database = null
@@ -28,7 +30,6 @@
         if (loginSession) {
           const sessionData = JSON.parse(loginSession)
           const currentTime = Date.now()
-
           // Check if session is still valid (within 24 hours)
           if (currentTime - sessionData.timestamp < SESSION_DURATION) {
             showMainDashboard()
@@ -38,7 +39,6 @@
             localStorage.removeItem(LOGIN_SESSION_KEY)
           }
         }
-
         showLoginScreen()
         return false
       } catch (error) {
@@ -52,7 +52,6 @@
       try {
         const loginScreen = document.getElementById("loginScreen")
         const mainDashboard = document.getElementById("mainDashboard")
-
         if (loginScreen) loginScreen.style.display = "flex"
         if (mainDashboard) mainDashboard.style.display = "none"
       } catch (error) {
@@ -64,7 +63,6 @@
       try {
         const loginScreen = document.getElementById("loginScreen")
         const mainDashboard = document.getElementById("mainDashboard")
-
         if (loginScreen) loginScreen.style.display = "none"
         if (mainDashboard) mainDashboard.style.display = "block"
       } catch (error) {
@@ -75,7 +73,6 @@
     function handleLogin(event) {
       try {
         event.preventDefault()
-
         const username = document.getElementById("username").value.trim()
         const password = document.getElementById("password").value
         const errorDiv = document.getElementById("loginError")
@@ -104,10 +101,8 @@
             errorDiv.textContent = "Invalid username or password. Please try again."
             errorDiv.style.display = "block"
           }
-
           // Clear password field
           document.getElementById("password").value = ""
-
           console.log("Login failed")
         }
       } catch (error) {
@@ -120,14 +115,11 @@
         if (confirm("Are you sure you want to logout?")) {
           // Remove login session
           localStorage.removeItem(LOGIN_SESSION_KEY)
-
           // Show login screen
           showLoginScreen()
-
           // Clear form fields
           document.getElementById("username").value = ""
           document.getElementById("password").value = ""
-
           console.log("Logout successful")
         }
       } catch (error) {
@@ -192,15 +184,25 @@
       }
     }
 
-    // --- Enhanced Auto-Save System ---
+    // --- Enhanced Auto-Save System with Debouncing ---
+    let saveTimeout = null
     function triggerAutoSave(action = "data_change") {
       try {
-        // Save immediately instead of using timeout
-        updateDashboardValues()
-        updateLastSaveTime()
-        console.log(`Auto-saved: ${action}`)
+        // Clear existing timeout to debounce saves
+        if (saveTimeout) {
+          clearTimeout(saveTimeout)
+        }
+
+        // Debounce saves to prevent rapid Firebase calls
+        saveTimeout = setTimeout(() => {
+          updateSyncStatus("syncing")
+          updateDashboardValues()
+          updateLastSaveTime()
+          console.log(`Auto-saved: ${action}`)
+        }, 500) // 500ms debounce
       } catch (error) {
         console.error("Error in triggerAutoSave:", error)
+        updateSyncStatus("error")
       }
     }
 
@@ -217,27 +219,131 @@
       }
     }
 
-    function saveCompleteState() {
+    // --- FIXED: Create completely clean data without circular references ---
+    function createFirebaseSafeData() {
       try {
-        const completeState = {
-          date: getTodayDate(),
-          timestamp: Date.now(),
-          billiardPaid: Number.parseFloat(document.getElementById("dashboard-billiard-paid")?.textContent || "0") || 0,
-          groceryTotal: Number.parseFloat(document.getElementById("dashboard-grocery-total")?.textContent || "0") || 0,
-          expenseTotal: Number.parseFloat(document.getElementById("dashboard-expense-total")?.textContent || "0") || 0,
-          combinedTotal:
-            Number.parseFloat(document.getElementById("dashboard-combined-total")?.textContent || "0") || 0,
-          billiardRows: collectBilliardData(),
-          groceryRows: collectGroceryData(),
-          expenseRows: collectExpenseData(),
-          billiardRowsCount: document.querySelectorAll("#billiardTbody tr").length,
-          groceryRowsCount: document.querySelectorAll("#groceryTbody tr").length,
-          expenseRowsCount: document.querySelectorAll("#expenseTbody tr").length,
+        const currentTime = Date.now()
+
+        // Collect only the essential data needed, no DOM references
+        const billiardData = []
+        document.querySelectorAll("#billiardTbody tr").forEach((tr) => {
+          try {
+            const name = tr.querySelector(".name")?.value || ""
+            const tableType = tr.querySelector(".tableType")?.value || "m8"
+            const amount = Number.parseFloat(tr.querySelector(".amount")?.value) || 0
+            const games = Number.parseInt(tr.querySelector(".games-value")?.textContent) || 0
+            const paid = Number.parseFloat(tr.querySelector(".paid-value")?.textContent) || 0
+            const total = Number.parseFloat(tr.querySelector(".total")?.textContent) || 0
+            const balance = Number.parseFloat(tr.querySelector(".balance")?.textContent) || 0
+            const status = tr.querySelector(".status")?.textContent || "Unpaid"
+            const isActive = tr._isActive !== false
+            const mode = tr.querySelector(".mode-btn")?.dataset.mode || "mesada"
+            const paidHistory = Array.isArray(tr._paidHistory) ? [...tr._paidHistory] : []
+
+            billiardData.push({
+              name,
+              tableType,
+              amount,
+              games,
+              paid,
+              total,
+              balance,
+              status,
+              isActive,
+              mode,
+              paidHistory,
+            })
+          } catch (error) {
+            console.error("Error collecting billiard row data:", error)
+          }
+        })
+
+        const groceryData = []
+        document.querySelectorAll("#groceryTbody tr").forEach((tr) => {
+          try {
+            const tableName = tr.querySelector(".grocery-table")?.value || ""
+            const item = tr.querySelector(".grocery-item")?.value || ""
+            const amount = Number.parseFloat(tr.querySelector(".grocery-amount")?.value) || 0
+            const purchases = Number.parseInt(tr.querySelector(".grocery-purchases-value")?.textContent) || 0
+            const totalItems = Number.parseInt(tr.querySelector(".grocery-total-items")?.textContent) || 0
+            const total = Number.parseFloat(tr.querySelector(".grocery-total")?.textContent) || 0
+            const status = tr._status || "Unpaid"
+
+            groceryData.push({
+              tableName,
+              item,
+              amount,
+              purchases,
+              totalItems,
+              total,
+              status,
+            })
+          } catch (error) {
+            console.error("Error collecting grocery row data:", error)
+          }
+        })
+
+        const expenseData = []
+        document.querySelectorAll("#expenseTbody tr").forEach((tr) => {
+          try {
+            if (tr._expenseData) {
+              expenseData.push({
+                expense: tr._expenseData.expense,
+                amount: tr._expenseData.amount,
+              })
+            }
+          } catch (error) {
+            console.error("Error collecting expense row data:", error)
+          }
+        })
+
+        // Calculate totals safely
+        const billiardPaid = billiardData.reduce((sum, row) => sum + (row.paid || 0), 0)
+        const groceryTotal = groceryData.reduce((sum, row) => sum + (row.total || 0), 0)
+        const expenseTotal = expenseData.reduce((sum, row) => sum + (row.amount || 0), 0)
+        const combinedTotal = billiardPaid + groceryTotal
+
+        return {
+          timestamp: currentTime,
+          date: new Date().toLocaleDateString() + " " + new Date().toLocaleTimeString(),
+          billiardPaid,
+          groceryTotal,
+          expenseTotal,
+          combinedTotal,
+          billiardRows: billiardData,
+          groceryRows: groceryData,
+          expenseRows: expenseData,
+          billiardRowsCount: billiardData.length,
+          groceryRowsCount: groceryData.length,
+          expenseRowsCount: expenseData.length,
           recallData: {
-            tableNames: groceryRecallTableNames,
-            items: groceryRecallItems,
+            tableNames: [...groceryRecallTableNames],
+            items: [...groceryRecallItems],
           },
         }
+      } catch (error) {
+        console.error("Error creating Firebase safe data:", error)
+        return {
+          timestamp: Date.now(),
+          date: new Date().toLocaleDateString() + " " + new Date().toLocaleTimeString(),
+          billiardPaid: 0,
+          groceryTotal: 0,
+          expenseTotal: 0,
+          combinedTotal: 0,
+          billiardRows: [],
+          groceryRows: [],
+          expenseRows: [],
+          billiardRowsCount: 0,
+          groceryRowsCount: 0,
+          expenseRowsCount: 0,
+          recallData: { tableNames: [], items: [] },
+        }
+      }
+    }
+
+    function saveCompleteState() {
+      try {
+        const completeState = createFirebaseSafeData()
 
         // Save locally immediately
         try {
@@ -249,8 +355,11 @@
           console.error("Error saving to localStorage:", error)
         }
 
-        // Save to Firebase if available
-        saveToFirebase("complete_state", completeState)
+        // Save to Firebase with protection against loops
+        if (!isFirebaseSyncPaused && completeState.timestamp > lastSaveTimestamp) {
+          lastSaveTimestamp = completeState.timestamp
+          saveToFirebaseRealtime("complete_state", completeState)
+        }
 
         return completeState
       } catch (error) {
@@ -264,20 +373,14 @@
         const savedState = localStorage.getItem("popsey_complete_state")
         if (savedState) {
           const state = JSON.parse(savedState)
-
           console.log(
             `Loading saved state: ${state.billiardRowsCount || 0} billiard rows, ${state.groceryRowsCount || 0} grocery rows, ${state.expenseRowsCount || 0} expense rows`,
           )
 
-          // Clear existing tables
-          document.querySelectorAll("#billiardTbody tr").forEach((tr) => tr.remove())
-          document.querySelectorAll("#groceryTbody tr").forEach((tr) => tr.remove())
-          document.querySelectorAll("#expenseTbody tr").forEach((tr) => tr.remove())
-          billiardRows = []
-          groceryRows = []
-          expenseRows = []
+          // Clear existing tables first
+          clearAllTables()
 
-          // Restore billiard rows
+          // Restore billiard rows ONLY if there are saved rows
           if (state.billiardRows && state.billiardRows.length > 0) {
             state.billiardRows.forEach((rowData) => {
               const tr = createBilliardRowFromData(rowData)
@@ -287,12 +390,9 @@
                 billiardRows.push(tr)
               }
             })
-          } else {
-            // Add default row if no saved rows
-            addBilliardRowSilent()
           }
 
-          // Restore grocery rows
+          // Restore grocery rows ONLY if there are saved rows
           if (state.groceryRows && state.groceryRows.length > 0) {
             state.groceryRows.forEach((rowData) => {
               const tr = createGroceryRowFromData(rowData)
@@ -302,9 +402,6 @@
                 groceryRows.push(tr)
               }
             })
-          } else {
-            // Add default row if no saved rows
-            addGroceryRowSilent()
           }
 
           // Restore expense rows
@@ -328,7 +425,6 @@
           // Update dashboard
           updateDashboardValues()
           filterBilliardRows()
-
           console.log(
             `Data loaded successfully: ${billiardRows.length} billiard rows, ${groceryRows.length} grocery rows, ${expenseRows.length} expense rows`,
           )
@@ -338,6 +434,25 @@
         console.error("Error loading saved state:", error)
       }
       return false
+    }
+
+    // New function to clear all tables without adding default rows
+    function clearAllTables() {
+      try {
+        // Clear existing tables
+        document.querySelectorAll("#billiardTbody tr").forEach((tr) => tr.remove())
+        document.querySelectorAll("#groceryTbody tr").forEach((tr) => tr.remove())
+        document.querySelectorAll("#expenseTbody tr").forEach((tr) => tr.remove())
+
+        // Reset arrays
+        billiardRows = []
+        groceryRows = []
+        expenseRows = []
+
+        console.log("All tables cleared")
+      } catch (error) {
+        console.error("Error clearing tables:", error)
+      }
     }
 
     function createBilliardRowFromData(data) {
@@ -380,12 +495,10 @@
         `
 
         // Restore paid history
-        tr._paidHistory = data.paidHistory || []
+        tr._paidHistory = Array.isArray(data.paidHistory) ? [...data.paidHistory] : []
         tr._isActive = data.isActive
-
         attachBilliardRowEvents(tr)
         updateBilliardRow(tr)
-
         return tr
       } catch (error) {
         console.error("Error creating billiard row from data:", error)
@@ -396,7 +509,6 @@
     function createGroceryRowFromData(data) {
       try {
         const tr = document.createElement("tr")
-
         // Create status cell content based on table name and status
         let statusContent = ""
         if (!data.tableName || data.tableName.trim() === "") {
@@ -427,10 +539,8 @@
         // Restore purchases
         tr._purchases = data.purchases
         tr._status = data.status || "Unpaid"
-
         attachGroceryRowEvents(tr)
         updateGroceryRow(tr)
-
         return tr
       } catch (error) {
         console.error("Error creating grocery row from data:", error)
@@ -455,7 +565,6 @@
           expense: data.expense,
           amount: data.amount,
         }
-
         attachExpenseRowEvents(tr)
         return tr
       } catch (error) {
@@ -469,7 +578,6 @@
       try {
         const statusElement = document.getElementById("connection-status")
         const syncElement = document.getElementById("sync-status")
-
         if (!statusElement || !syncElement) return // Safety check
 
         if (isOnline) {
@@ -493,7 +601,6 @@
         isOnline = true
         updateConnectionStatus()
       })
-
       window.addEventListener("offline", () => {
         isOnline = false
         updateConnectionStatus()
@@ -592,7 +699,7 @@
       try {
         if (isOnline && firebaseInitialized && storage) {
           const storageRef = storage.ref(`exports/${filename}`)
-          const blob = new Blob([content], { type: "text/csv" })
+          const blob = new Blob([content], { type: "application/pdf" })
           storageRef
             .put(blob)
             .then(() => console.log(`File uploaded: ${filename}`))
@@ -607,6 +714,78 @@
       }
     }
 
+    // --- FIXED: Firebase Real-time Save Function with Loop Prevention ---
+    function saveToFirebaseRealtime(path, data) {
+      try {
+        if (!isOnline || !firebaseInitialized || !database || isFirebaseSyncPaused) {
+          if (!firebaseInitialized) {
+            updateSyncStatus("offline")
+          } else {
+            addToSyncQueue("save_complete_state", data)
+            updateSyncStatus("pending")
+          }
+          return
+        }
+
+        // Prevent loops by pausing sync temporarily
+        isFirebaseSyncPaused = true
+
+        database
+          .ref(`popsey/${path}`)
+          .set(data)
+          .then(() => {
+            console.log(`Real-time data saved to Firebase: ${path}`)
+            updateSyncStatus("synced")
+
+            // Re-enable sync after a delay
+            setTimeout(() => {
+              isFirebaseSyncPaused = false
+            }, 2000)
+          })
+          .catch((error) => {
+            console.error("Firebase real-time save error:", error)
+            updateSyncStatus("error")
+            isFirebaseSyncPaused = false
+          })
+      } catch (error) {
+        console.error("Error in saveToFirebaseRealtime:", error)
+        updateSyncStatus("error")
+        isFirebaseSyncPaused = false
+      }
+    }
+
+    function updateSyncStatus(status) {
+      try {
+        const syncElement = document.getElementById("sync-status")
+        if (!syncElement) return
+
+        switch (status) {
+          case "synced":
+            syncElement.innerHTML = "✓ Synced"
+            syncElement.style.color = "#43cea2"
+            break
+          case "syncing":
+            syncElement.innerHTML = "🔄 Syncing..."
+            syncElement.style.color = "#ffc107"
+            break
+          case "pending":
+            syncElement.innerHTML = "⏳ Pending sync"
+            syncElement.style.color = "#ffc107"
+            break
+          case "offline":
+            syncElement.innerHTML = "📱 Offline"
+            syncElement.style.color = "#6c757d"
+            break
+          case "error":
+            syncElement.innerHTML = "❌ Sync error"
+            syncElement.style.color = "#dc3545"
+            break
+        }
+      } catch (error) {
+        console.error("Error updating sync status:", error)
+      }
+    }
+
     // --- Tab switching ---
     function setupTabSwitching() {
       try {
@@ -615,6 +794,7 @@
             try {
               document.querySelectorAll(".tab-btn").forEach((b) => b.classList.remove("active"))
               btn.classList.add("active")
+
               document.querySelectorAll(".tab-content").forEach((tab) => (tab.style.display = "none"))
               const targetTab = document.getElementById(btn.dataset.tab)
               if (targetTab) {
@@ -638,12 +818,18 @@
         // Initialize Firebase after DOM is loaded
         initializeFirebase()
 
+        // Set up real-time synchronization with delay to prevent conflicts
+        setTimeout(() => {
+          initializeFirebaseSync()
+        }, 3000) // Increased delay
+
         // Set up initial tab visibility
         document.querySelectorAll(".tab-content").forEach((tab) => (tab.style.display = "none"))
         const dashboardTab = document.getElementById("dashboard")
         if (dashboardTab) {
           dashboardTab.style.display = ""
         }
+
         document.querySelectorAll(".tab-btn").forEach((btn) => btn.classList.remove("active"))
         const dashboardBtn = document.querySelector('.tab-btn[data-tab="dashboard"]')
         if (dashboardBtn) {
@@ -665,38 +851,10 @@
         // Try to load saved state first
         const hasLoadedData = loadCompleteState()
 
-        // If no saved data, initialize with default rows
+        // If no saved data, initialize with EMPTY tables (no default rows)
         if (!hasLoadedData) {
-          console.log("No saved data found, initializing with default rows")
-          // Initialize existing rows if they exist in HTML
-          document.querySelectorAll("#billiardTbody tr").forEach((tr) => {
-            if (!tr.querySelector(".delete-row-btn")) {
-              const td = tr.querySelector("td:last-child")
-              if (td) {
-                const btn = document.createElement("button")
-                btn.className = "delete-row-btn"
-                btn.textContent = "Delete"
-                btn.title = "Delete Row"
-                td.appendChild(btn)
-              }
-            }
-            attachBilliardRowEvents(tr)
-            updateBilliardRow(tr)
-            billiardRows.push(tr)
-          })
-
-          document.querySelectorAll("#groceryTbody tr").forEach((tr) => {
-            attachGroceryRowEvents(tr)
-            updateGroceryRow(tr)
-            groceryRows.push(tr)
-          })
-
-          document.querySelectorAll("#expenseTbody tr").forEach((tr) => {
-            attachExpenseRowEvents(tr)
-            expenseRows.push(tr)
-          })
-
-          filterBilliardRows()
+          console.log("No saved data found, initializing with empty tables")
+          clearAllTables()
         }
 
         // Set up tab switching
@@ -737,6 +895,7 @@
         let tally = ""
         const groups = Math.floor(n / 5)
         const remainder = n % 5
+
         for (let i = 0; i < groups; i++) {
           tally += '||||/<span style="margin:0 6px;">-</span>'
         }
@@ -758,12 +917,14 @@
         const mode = row.querySelector(".mode-btn")?.dataset.mode || "mesada"
         const amountInput = row.querySelector(".amount")
         const amount = getAmount(tableType, mode)
+
         if (amountInput) {
           amountInput.value = amount
         }
 
         const gamesValueEl = row.querySelector(".games-value")
         const gamesValue = Number.parseInt(gamesValueEl?.textContent) || 0
+
         const gamesTallyEl = row.querySelector(".games-tally")
         if (gamesTallyEl) {
           gamesTallyEl.innerHTML = renderTally(gamesValue)
@@ -772,6 +933,7 @@
         // Paid history logic
         if (!row._paidHistory) row._paidHistory = []
         const paidValue = row._paidHistory.reduce((sum, v) => sum + v, 0)
+
         const paidValueEl = row.querySelector(".paid-value")
         if (paidValueEl) {
           paidValueEl.textContent = paidValue
@@ -859,18 +1021,22 @@
             const btn = row.querySelector(".mode-btn")
             const currentMode = btn.dataset.mode
             const nextMode = currentMode === "mesada" ? "hour" : "mesada"
+
             const confirmMsg =
               currentMode === "mesada"
                 ? "Switch to Hour mode? This will set the amount to 100."
                 : "Switch to Mesada mode? This will set the amount based on table type."
+
             if (window.confirm(confirmMsg)) {
               btn.dataset.mode = nextMode
               btn.textContent = nextMode.charAt(0).toUpperCase() + nextMode.slice(1)
+
               if (nextMode === "hour") {
                 btn.classList.add("active")
               } else {
                 btn.classList.remove("active")
               }
+
               updateBilliardRow(row)
               triggerAutoSave("billiard_mode_change")
             }
@@ -884,6 +1050,7 @@
           addGameBtn.addEventListener("click", () => {
             if (addGameLocked) return
             addGameLocked = true
+
             const gamesValueEl = row.querySelector(".games-value")
             if (gamesValueEl) {
               const val = Number.parseInt(gamesValueEl.textContent) || 0
@@ -891,6 +1058,7 @@
               updateBilliardRow(row)
               triggerAutoSave("billiard_add_game")
             }
+
             setTimeout(() => {
               addGameLocked = false
             }, 350)
@@ -904,6 +1072,7 @@
           delGameBtn.addEventListener("click", () => {
             if (delGameLocked) return
             delGameLocked = true
+
             const gamesValueEl = row.querySelector(".games-value")
             if (gamesValueEl) {
               const val = Number.parseInt(gamesValueEl.textContent) || 0
@@ -912,6 +1081,7 @@
               updateBilliardRow(row)
               triggerAutoSave("billiard_delete_game")
             }
+
             setTimeout(() => {
               delGameLocked = false
             }, 350)
@@ -924,6 +1094,7 @@
         if (addPaidBtn) {
           addPaidBtn.addEventListener("click", () => {
             if (addPaidLocked) return
+
             const paidInputEl = row.querySelector(".paid-input")
             if (paidInputEl) {
               const inputVal = Number.parseFloat(paidInputEl.value) || 0
@@ -934,6 +1105,7 @@
                 paidInputEl.value = 0
                 updateBilliardRow(row)
                 triggerAutoSave("billiard_add_payment")
+
                 setTimeout(() => {
                   addPaidLocked = false
                 }, 350)
@@ -956,6 +1128,7 @@
                   row._paidHistory.splice(idx, 1)
                   updateBilliardRow(row)
                   triggerAutoSave("billiard_delete_payment")
+
                   setTimeout(() => {
                     delPaidLocked = false
                   }, 350)
@@ -1040,57 +1213,6 @@
         console.log(`Billiard row added. Total rows: ${billiardRows.length}`)
       } catch (error) {
         console.error("Error adding billiard row:", error)
-      }
-    }
-
-    function addBilliardRowSilent() {
-      try {
-        const tbody = document.getElementById("billiardTbody")
-        if (!tbody) return
-
-        const tr = document.createElement("tr")
-        tr.innerHTML = `
-          <td>
-            <button class="active-switch-btn" data-active="true">Active</button>
-          </td>
-          <td class="status status-unpaid">Unpaid</td>
-          <td>
-            <select class="tableType">
-              <option value="m8">M8</option>
-              <option value="m7">M7</option>
-              <option value="alpha">Alpha</option>
-              <option value="regal">Regal</option>
-            </select>
-            <button class="mode-btn" data-mode="mesada">Mesada</button>
-          </td>
-          <td><input type="number" class="amount" value="15" readonly></td>
-          <td>
-            <span class="games-value">0</span>
-            <div class="games-tally" style="display:inline-block;vertical-align:middle;"></div>
-            <button class="add-game-btn">Add</button>
-            <button class="delete-game-btn">Delete</button>
-          </td>
-          <td class="total">0</td>
-          <td>
-            <span class="paid-value">0</span>
-            <input type="number" class="paid-input" value="0" min="0" style="width:60px;">
-            <button class="add-paid-btn">Add</button>
-            <div class="paid-history"></div>
-          </td>
-          <td class="totalPaid">0</td>
-          <td class="balance">0</td>
-          <td>
-            <input type="text" class="name">
-            <button class="delete-row-btn" title="Delete Row">Delete</button>
-          </td>
-        `
-        tbody.appendChild(tr)
-        attachBilliardRowEvents(tr)
-        updateBilliardRow(tr)
-        billiardRows.push(tr)
-        filterBilliardRows()
-      } catch (error) {
-        console.error("Error adding billiard row silently:", error)
       }
     }
 
@@ -1337,7 +1459,7 @@
       }
     }
 
-    // Add Grocery Row function with delete row button
+    // Modified addGroceryRow function to add new rows at the top like billiard
     function addGroceryRow() {
       try {
         console.log("Adding new grocery row...")
@@ -1362,52 +1484,25 @@
             <button class="grocery-delete-row-btn" title="Delete Row">Delete</button>
           </td>
         `
-        tbody.appendChild(tr)
+
+        // Insert at the top instead of bottom
+        if (tbody.children.length > 0) {
+          tbody.insertBefore(tr, tbody.children[0])
+        } else {
+          tbody.appendChild(tr)
+        }
+
         tr._purchases = 0
         tr._status = "Unpaid"
         attachGroceryRowEvents(tr)
         updateGroceryRow(tr)
-        groceryRows.push(tr)
+        groceryRows.unshift(tr) // Add to beginning of array
 
         // IMMEDIATE SAVE after adding row
         triggerAutoSave("add_grocery_row")
         console.log(`Grocery row added. Total rows: ${groceryRows.length}`)
       } catch (error) {
         console.error("Error adding grocery row:", error)
-      }
-    }
-
-    function addGroceryRowSilent() {
-      try {
-        const tbody = document.getElementById("groceryTbody")
-        if (!tbody) return
-
-        const tr = document.createElement("tr")
-        tr.innerHTML = `
-          <td class="grocery-status-cell"><span class="grocery-status grocery-purchase">Purchase</span></td>
-          <td><input type="text" class="grocery-table"></td>
-          <td><input type="text" class="grocery-item"></td>
-          <td><input type="number" class="grocery-amount" value="0"></td>
-          <td>
-            <span class="grocery-purchases-value">0</span>
-            <input type="number" class="grocery-purchases-input" value="1" min="1" style="width:50px;">
-            <button class="grocery-add-purchase-btn">Add</button>
-            <button class="grocery-delete-purchase-btn">Delete</button>
-          </td>
-          <td class="grocery-total-items">0</td>
-          <td class="grocery-total">0</td>
-          <td>
-            <button class="grocery-delete-row-btn" title="Delete Row">Delete</button>
-          </td>
-        `
-        tbody.appendChild(tr)
-        tr._purchases = 0
-        tr._status = "Unpaid"
-        attachGroceryRowEvents(tr)
-        updateGroceryRow(tr)
-        groceryRows.push(tr)
-      } catch (error) {
-        console.error("Error adding grocery row silently:", error)
       }
     }
 
@@ -1752,7 +1847,6 @@
     function updateLiveClock() {
       try {
         const now = new Date()
-
         // Format date as "January 7, 2024"
         const dateOptions = {
           year: "numeric",
@@ -1789,6 +1883,54 @@
         setInterval(updateLiveClock, 1000)
       } catch (error) {
         console.error("Error starting live clock:", error)
+      }
+    }
+
+    // --- Fixed End Shift Function ---
+    function handleEndShift() {
+      try {
+        if (
+          !window.confirm(
+            "End shift and reset all tables? This will save current data to history and clear all entries.",
+          )
+        ) {
+          return
+        }
+
+        // Get current data for export and history
+        const currentData = {
+          date: getTodayDate(),
+          billiardPaid: Number.parseFloat(document.getElementById("dashboard-billiard-paid")?.textContent) || 0,
+          groceryTotal: Number.parseFloat(document.getElementById("dashboard-grocery-total")?.textContent) || 0,
+          expenseTotal: Number.parseFloat(document.getElementById("dashboard-expense-total")?.textContent) || 0,
+          combinedTotal: Number.parseFloat(document.getElementById("dashboard-combined-total")?.textContent) || 0,
+          billiardRows: collectBilliardData(),
+          groceryRows: collectGroceryData(),
+          expenseRows: collectExpenseData(),
+        }
+
+        // Save to history first
+        const historyItem = saveShiftHistory(currentData)
+
+        // Reset tables to empty state
+        resetAllTables()
+
+        // Reload history table
+        loadShiftHistoryTable()
+
+        // Show success message with download option
+        const downloadPDF = window.confirm(
+          "Shift ended successfully! Data has been saved to history and tables have been reset.\n\n" +
+            "Would you like to download the PDF report for this shift?",
+        )
+
+        if (downloadPDF && historyItem) {
+          const filename = `shift_end_${currentData.date.replace(/[: ]/g, "_")}.html`
+          exportToPDF(currentData, filename)
+        }
+      } catch (error) {
+        console.error("Error in handleEndShift:", error)
+        alert("Error ending shift. Please try again.")
       }
     }
 
@@ -1930,7 +2072,6 @@
         document.addEventListener("click", (e) => {
           const expenseModal = document.getElementById("expenseModal")
           const editExpenseModal = document.getElementById("editExpenseModal")
-
           if (e.target === expenseModal) {
             hideExpenseModal()
           }
@@ -1947,7 +2088,6 @@
             document.querySelectorAll("#groceryTbody tr").forEach((row) => {
               const tableNameEl = row.querySelector(".grocery-table")
               const itemEl = row.querySelector(".grocery-item")
-
               if (tableNameEl && itemEl) {
                 const tableName = tableNameEl.value.toLowerCase()
                 const item = itemEl.value.toLowerCase()
@@ -1977,51 +2117,20 @@
               billiardPaid: Number.parseFloat(document.getElementById("dashboard-billiard-paid")?.textContent) || 0,
               groceryTotal: Number.parseFloat(document.getElementById("dashboard-grocery-total")?.textContent) || 0,
               expenseTotal: Number.parseFloat(document.getElementById("dashboard-expense-total")?.textContent) || 0,
-              combinedTotal: Number.parseFloat(document.getElementById("dashboard-combined-total")?.textContent) || 0, // This will now be billiard + grocery only
+              combinedTotal: Number.parseFloat(document.getElementById("dashboard-combined-total")?.textContent) || 0,
               billiardRows: collectBilliardData(),
               groceryRows: collectGroceryData(),
               expenseRows: collectExpenseData(),
             }
-
-            const filename = `current_data_${currentData.date.replace(/[: ]/g, "_")}.csv`
-            exportToExcel(currentData, filename)
+            const filename = `current_data_${currentData.date.replace(/[: ]/g, "_")}.html`
+            exportToPDF(currentData, filename)
           })
         }
 
-        // End shift button
+        // End shift button - UPDATED
         const endShiftBtn = document.getElementById("endShiftBtn")
         if (endShiftBtn) {
-          endShiftBtn.addEventListener("click", () => {
-            if (!window.confirm("End shift and reset all tables? This will export current data and clear all entries."))
-              return
-
-            // Get current data for export and history
-            const currentData = {
-              date: getTodayDate(),
-              billiardPaid: Number.parseFloat(document.getElementById("dashboard-billiard-paid")?.textContent) || 0,
-              groceryTotal: Number.parseFloat(document.getElementById("dashboard-grocery-total")?.textContent) || 0,
-              expenseTotal: Number.parseFloat(document.getElementById("dashboard-expense-total")?.textContent) || 0,
-              combinedTotal: Number.parseFloat(document.getElementById("dashboard-combined-total")?.textContent) || 0, // This will now be billiard + grocery only
-              billiardRows: collectBilliardData(),
-              groceryRows: collectGroceryData(),
-              expenseRows: collectExpenseData(),
-            }
-
-            // Export to Excel
-            const filename = `shift_end_${currentData.date.replace(/[: ]/g, "_")}.csv`
-            exportToExcel(currentData, filename)
-
-            // Save to history
-            saveShiftHistory(currentData)
-
-            // Reset tables
-            resetAllTables()
-
-            // Reload history table
-            loadShiftHistoryTable()
-
-            alert("Shift ended successfully! Data exported and tables reset.")
-          })
+          endShiftBtn.addEventListener("click", handleEndShift)
         }
 
         // Clear history button
@@ -2118,7 +2227,7 @@
           groceryTotal: data.groceryTotal,
           expenseTotal: data.expenseTotal || 0,
           combinedTotal: data.combinedTotal,
-          filename: `shift_${data.date.replace(/[: ]/g, "_")}.csv`,
+          filename: `shift_${data.date.replace(/[: ]/g, "_")}.html`,
           timestamp: Date.now(),
           billiardRows: data.billiardRows,
           groceryRows: data.groceryRows,
@@ -2134,7 +2243,6 @@
 
         // Save to Firebase
         saveHistoryToFirebase(historyItem)
-
         return historyItem
       } catch (error) {
         console.error("Error in saveShiftHistory:", error)
@@ -2142,90 +2250,573 @@
       }
     }
 
-    function exportToExcel(data, filename) {
+    // --- Fixed PDF Export Functions ---
+    function exportToPDF(data, filename) {
       try {
-        const csv = generateComprehensiveExcel(data)
-        const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" })
+        console.log("Generating PDF export...")
+
+        // Generate HTML content
+        const htmlContent = generatePDFHTML(data)
+
+        // Create a blob with the HTML content for download
+        const blob = new Blob([htmlContent], { type: "text/html" })
         const url = URL.createObjectURL(blob)
+
+        // Create a temporary link and trigger download
         const a = document.createElement("a")
         a.href = url
-        a.download = filename
+        a.download = filename.replace(".pdf", ".html")
         document.body.appendChild(a)
         a.click()
         document.body.removeChild(a)
         URL.revokeObjectURL(url)
 
-        // Upload to Firebase Storage
-        uploadFileToFirebase(filename, csv)
+        console.log("PDF export completed")
       } catch (error) {
-        console.error("Error exporting to Excel:", error)
+        console.error("Error exporting to PDF:", error)
+        alert("Error generating PDF export. Please try again.")
       }
     }
 
-    function generateComprehensiveExcel(data) {
+    // --- Enhanced PDF Generation with Better Styling ---
+    function generatePDFHTML(data) {
       try {
-        let csv = "POPSEY SYSTEM - COMPREHENSIVE REPORT\n"
-        csv += `Generated: ${data.date}\n`
-        csv += `Billiard Total Paid: ${data.billiardPaid.toFixed(2)}\n`
-        csv += `Grocery Total: ${data.groceryTotal.toFixed(2)}\n`
-        csv += `Expense Total: ${(data.expenseTotal || 0).toFixed(2)}\n`
-        csv += `Combined Total: ${data.combinedTotal.toFixed(2)}\n\n`
-
-        // Billiard Section
-        csv += "=== BILLIARD TRANSACTIONS ===\n"
-        csv +=
-          "Name,Table Type,Mode,Amount per Game,Number of Games,Total Amount,Total Paid,Balance,Status,Active/Done,Paid History\n"
-
-        data.billiardRows.forEach((row) => {
-          const paidHistoryStr = row.paidHistory ? row.paidHistory.join("; ") : ""
-          csv += `"${row.name}","${row.tableType}","${row.mode}",${row.amount},${row.games},${row.total},${row.paid},${row.balance},"${row.status}","${row.isActive ? "Active" : "Done"}","${paidHistoryStr}"\n`
-        })
-
-        csv += "\n=== GROCERY TRANSACTIONS ===\n"
-        csv += "Table/Name,Item,Amount per Item,Number of Purchases,Total Items,Total Amount,Status\n"
-
-        data.groceryRows.forEach((row) => {
-          csv += `"${row.tableName}","${row.item}",${row.amount},${row.purchases},${row.totalItems},${row.total}","${row.status}"\n`
-        })
-
-        // Expense Section
-        csv += "\n=== EXPENSE TRANSACTIONS ===\n"
-        csv += "Expense,Amount\n"
-
-        if (data.expenseRows && data.expenseRows.length > 0) {
-          data.expenseRows.forEach((row) => {
-            csv += `"${row.expense}",${row.amount.toFixed(2)}\n`
-          })
-        }
-
-        // Summary Section
-        csv += "\n=== SUMMARY ===\n"
-        csv += "Category,Amount\n"
-        csv += `Billiard Total Paid,${data.billiardPaid.toFixed(2)}\n`
-        csv += `Grocery Total,${data.groceryTotal.toFixed(2)}\n`
-        csv += `Expense Total,${(data.expenseTotal || 0).toFixed(2)}\n`
-        csv += `Combined Total,${data.combinedTotal.toFixed(2)}\n`
-
-        return csv
+        return `
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>POPSEY System - Shift Report</title>
+          <style>
+            * {
+              margin: 0;
+              padding: 0;
+              box-sizing: border-box;
+            }
+            
+            body {
+              font-family: 'Segoe UI', 'Roboto', Arial, sans-serif;
+              background: #fff;
+              padding: 20px;
+              color: #222b3a;
+              line-height: 1.6;
+            }
+            
+            .header {
+              text-align: center;
+              margin-bottom: 30px;
+              padding: 25px;
+              background: linear-gradient(135deg, #43cea2 0%, #185a9d 100%);
+              color: white;
+              border-radius: 12px;
+              box-shadow: 0 4px 15px rgba(67, 206, 162, 0.3);
+            }
+            
+            .header h1 {
+              font-size: 32px;
+              margin-bottom: 10px;
+              font-weight: 700;
+            }
+            
+            .header p {
+              font-size: 16px;
+              opacity: 0.9;
+              margin: 5px 0;
+            }
+            
+            .summary-cards {
+              display: grid;
+              grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+              gap: 20px;
+              margin-bottom: 40px;
+            }
+            
+            .summary-card {
+              background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+              padding: 25px;
+              border-radius: 12px;
+              text-align: center;
+              border: 1px solid #dee2e6;
+              box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+              transition: transform 0.2s ease;
+            }
+            
+            .summary-card:hover {
+              transform: translateY(-2px);
+            }
+            
+            .summary-card .label {
+              font-size: 14px;
+              color: #6c757d;
+              margin-bottom: 10px;
+              font-weight: 500;
+              text-transform: uppercase;
+              letter-spacing: 0.5px;
+            }
+            
+            .summary-card .value {
+              font-size: 28px;
+              font-weight: 700;
+              color: #43cea2;
+            }
+            
+            .section {
+              background: #fff;
+              margin-bottom: 30px;
+              border-radius: 12px;
+              border: 1px solid #dee2e6;
+              overflow: hidden;
+              box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            }
+            
+            .section-header {
+              background: linear-gradient(135deg, #43cea2 0%, #185a9d 100%);
+              color: #fff;
+              padding: 20px 25px;
+              font-size: 20px;
+              font-weight: 600;
+            }
+            
+            .section-content {
+              padding: 25px;
+            }
+            
+            table {
+              width: 100%;
+              border-collapse: collapse;
+              margin-top: 15px;
+            }
+            
+            th, td {
+              padding: 15px 12px;
+              text-align: left;
+              border-bottom: 1px solid #dee2e6;
+            }
+            
+            th {
+              background: #f8f9fa;
+              font-weight: 600;
+              color: #495057;
+              font-size: 14px;
+              text-transform: uppercase;
+              letter-spacing: 0.5px;
+            }
+            
+            tr:hover {
+              background: #f8f9fa;
+            }
+            
+            .status-paid {
+              color: #28a745;
+              font-weight: bold;
+              background: #d4edda;
+              border-radius: 6px;
+              padding: 4px 8px;
+              font-size: 12px;
+              text-transform: uppercase;
+            }
+            
+            .status-unpaid {
+              color: #dc3545;
+              font-weight: bold;
+              background: #f8d7da;
+              border-radius: 6px;
+              padding: 4px 8px;
+              font-size: 12px;
+              text-transform: uppercase;
+            }
+            
+            .no-data {
+              text-align: center;
+              color: #6c757d;
+              font-style: italic;
+              padding: 60px;
+              font-size: 16px;
+            }
+            
+            .download-info {
+              background: #e3f2fd;
+              border: 1px solid #2196f3;
+              border-radius: 8px;
+              padding: 15px;
+              margin-bottom: 20px;
+              color: #1976d2;
+              text-align: center;
+            }
+            
+            @media print {
+              body {
+                background: #fff !important;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+              }
+              
+              .section {
+                break-inside: avoid;
+                page-break-inside: avoid;
+              }
+              
+              .header {
+                break-after: avoid;
+                page-break-after: avoid;
+              }
+              
+              .download-info {
+                display: none;
+              }
+            }
+            
+            @media (max-width: 768px) {
+              body {
+                padding: 10px;
+              }
+              
+              .summary-cards {
+                grid-template-columns: 1fr;
+              }
+              
+              table {
+                font-size: 14px;
+              }
+              
+              th, td {
+                padding: 10px 8px;
+              }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="download-info">
+            <strong>💡 Tip:</strong> Use Ctrl+P (Cmd+P on Mac) to print this report as a PDF, or use your browser's "Save as PDF" option.
+          </div>
+          
+          <div class="header">
+            <h1>🎱 POPSEY System - Shift Report</h1>
+            <p><strong>📅 Shift Date:</strong> ${data.date}</p>
+            <p><strong>🕒 Generated:</strong> ${new Date().toLocaleString()}</p>
+          </div>
+          
+          <div class="summary-cards">
+            <div class="summary-card">
+              <div class="label">🎱 Billiard Revenue</div>
+              <div class="value">₱${data.billiardPaid.toFixed(2)}</div>
+            </div>
+            <div class="summary-card">
+              <div class="label">🛒 Grocery Revenue</div>
+              <div class="value">₱${data.groceryTotal.toFixed(2)}</div>
+            </div>
+            <div class="summary-card">
+              <div class="label">💰 Total Expenses</div>
+              <div class="value">₱${(data.expenseTotal || 0).toFixed(2)}</div>
+            </div>
+            <div class="summary-card">
+              <div class="label">💵 Total Revenue</div>
+              <div class="value">₱${data.combinedTotal.toFixed(2)}</div>
+            </div>
+          </div>
+          
+          <div class="section">
+            <div class="section-header">🎱 Billiard Transactions</div>
+            <div class="section-content">
+              ${
+                data.billiardRows && data.billiardRows.length > 0
+                  ? `
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Customer Name</th>
+                      <th>Table Type</th>
+                      <th>Mode</th>
+                      <th>Rate/Game</th>
+                      <th>Games</th>
+                      <th>Total Due</th>
+                      <th>Amount Paid</th>
+                      <th>Balance</th>
+                      <th>Status</th>
+                      <th>State</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${data.billiardRows
+                      .map(
+                        (row) => `
+                      <tr>
+                        <td>${row.name || "Walk-in Customer"}</td>
+                        <td><strong>${row.tableType.toUpperCase()}</strong></td>
+                        <td>${row.mode.charAt(0).toUpperCase() + row.mode.slice(1)}</td>
+                        <td>₱${row.amount.toFixed(2)}</td>
+                        <td><strong>${row.games}</strong></td>
+                        <td>₱${row.total.toFixed(2)}</td>
+                        <td>₱${row.paid.toFixed(2)}</td>
+                        <td>₱${row.balance.toFixed(2)}</td>
+                        <td><span class="status-${row.status.toLowerCase()}">${row.status}</span></td>
+                        <td>${row.isActive ? "🟢 Active" : "✅ Done"}</td>
+                      </tr>
+                    `,
+                      )
+                      .join("")}
+                  </tbody>
+                </table>
+              `
+                  : '<div class="no-data">📝 No billiard transactions recorded for this shift</div>'
+              }
+            </div>
+          </div>
+          
+          <div class="section">
+            <div class="section-header">🛒 Grocery Transactions</div>
+            <div class="section-content">
+              ${
+                data.groceryRows && data.groceryRows.length > 0
+                  ? `
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Table/Customer</th>
+                      <th>Item</th>
+                      <th>Price/Item</th>
+                      <th>Quantity</th>
+                      <th>Total Items</th>
+                      <th>Total Amount</th>
+                      <th>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${data.groceryRows
+                      .map(
+                        (row) => `
+                      <tr>
+                        <td>${row.tableName || "Direct Purchase"}</td>
+                        <td>${row.item || "N/A"}</td>
+                        <td>₱${row.amount.toFixed(2)}</td>
+                        <td><strong>${row.purchases}</strong></td>
+                        <td>${row.totalItems}</td>
+                        <td>₱${row.total.toFixed(2)}</td>
+                        <td><span class="status-${row.status.toLowerCase()}">${row.status}</span></td>
+                      </tr>
+                    `,
+                      )
+                      .join("")}
+                  </tbody>
+                </table>
+              `
+                  : '<div class="no-data">📝 No grocery transactions recorded for this shift</div>'
+              }
+            </div>
+          </div>
+          
+          <div class="section">
+            <div class="section-header">💰 Expense Transactions</div>
+            <div class="section-content">
+              ${
+                data.expenseRows && data.expenseRows.length > 0
+                  ? `
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Expense Description</th>
+                      <th>Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${data.expenseRows
+                      .map(
+                        (row) => `
+                      <tr>
+                        <td>${row.expense}</td>
+                        <td><strong>₱${row.amount.toFixed(2)}</strong></td>
+                      </tr>
+                    `,
+                      )
+                      .join("")}
+                  </tbody>
+                </table>
+              `
+                  : '<div class="no-data">📝 No expense transactions recorded for this shift</div>'
+              }
+            </div>
+          </div>
+          
+          <div class="section">
+            <div class="section-header">📊 Shift Summary</div>
+            <div class="section-content">
+              <table>
+                <tbody>
+                  <tr>
+                    <td><strong>📊 Total Billiard Transactions:</strong></td>
+                    <td><strong>${data.billiardRows ? data.billiardRows.length : 0}</strong></td>
+                  </tr>
+                  <tr>
+                    <td><strong>🛒 Total Grocery Transactions:</strong></td>
+                    <td><strong>${data.groceryRows ? data.groceryRows.length : 0}</strong></td>
+                  </tr>
+                  <tr>
+                    <td><strong>💰 Total Expense Transactions:</strong></td>
+                    <td><strong>${data.expenseRows ? data.expenseRows.length : 0}</strong></td>
+                  </tr>
+                  <tr style="background: #f8f9fa;">
+                    <td><strong>🎱 Billiard Revenue:</strong></td>
+                    <td><strong>₱${data.billiardPaid.toFixed(2)}</strong></td>
+                  </tr>
+                  <tr style="background: #f8f9fa;">
+                    <td><strong>🛒 Grocery Revenue:</strong></td>
+                    <td><strong>₱${data.groceryTotal.toFixed(2)}</strong></td>
+                  </tr>
+                  <tr style="background: #f8f9fa;">
+                    <td><strong>💰 Total Expenses:</strong></td>
+                    <td><strong>₱${(data.expenseTotal || 0).toFixed(2)}</strong></td>
+                  </tr>
+                  <tr style="border-top: 3px solid #43cea2; background: #e8f5e8; font-size: 18px;">
+                    <td><strong>💵 NET REVENUE:</strong></td>
+                    <td><strong style="color: #28a745;">₱${data.combinedTotal.toFixed(2)}</strong></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+          
+          <div style="text-align: center; margin-top: 40px; padding: 20px; background: #f8f9fa; border-radius: 8px;">
+            <p style="color: #6c757d; font-size: 14px;">
+              Report generated by POPSEY System on ${new Date().toLocaleString()}
+            </p>
+          </div>
+        </body>
+        </html>
+      `
       } catch (error) {
-        console.error("Error generating comprehensive Excel:", error)
-        return ""
+        console.error("Error generating PDF HTML:", error)
+        return "<html><body><h1>Error generating report</h1></body></html>"
       }
     }
 
     function resetAllTables() {
       try {
-        document.querySelectorAll("#billiardTbody tr").forEach((tr) => tr.remove())
-        document.querySelectorAll("#groceryTbody tr").forEach((tr) => tr.remove())
-        document.querySelectorAll("#expenseTbody tr").forEach((tr) => tr.remove())
-        billiardRows = []
-        groceryRows = []
-        expenseRows = []
-        addBilliardRow()
-        addGroceryRow()
+        // Clear all tables completely (no default rows)
+        clearAllTables()
+
+        // Clear localStorage state as well
+        localStorage.removeItem("popsey_complete_state")
+
+        // Trigger auto-save to update dashboard
         triggerAutoSave("reset_tables")
+
+        console.log("All tables reset to empty state")
       } catch (error) {
         console.error("Error resetting tables:", error)
+      }
+    }
+
+    // --- FIXED: Enhanced Firebase Real-time Synchronization with Loop Prevention ---
+    function initializeFirebaseSync() {
+      try {
+        if (!firebaseInitialized || !database) return
+
+        console.log("Setting up real-time Firebase synchronization...")
+
+        // Listen for real-time updates to complete state with loop prevention
+        database.ref("popsey/complete_state").on("value", (snapshot) => {
+          try {
+            if (isFirebaseSyncPaused) return // Prevent processing during our own saves
+
+            const remoteState = snapshot.val()
+            if (remoteState && remoteState.timestamp) {
+              const localState = localStorage.getItem("popsey_complete_state")
+              let shouldUpdate = true
+
+              if (localState) {
+                const localData = JSON.parse(localState)
+                // Only update if remote data is significantly newer (more than 1 second)
+                shouldUpdate = remoteState.timestamp > (localData.timestamp || 0) + 1000
+              }
+
+              if (shouldUpdate && remoteState.timestamp > lastSaveTimestamp) {
+                console.log("Syncing remote data to local...")
+                localStorage.setItem("popsey_complete_state", JSON.stringify(remoteState))
+
+                // Pause local sync to prevent loops
+                isFirebaseSyncPaused = true
+                loadCompleteStateFromData(remoteState)
+
+                // Re-enable after processing
+                setTimeout(() => {
+                  isFirebaseSyncPaused = false
+                }, 3000)
+              }
+            }
+          } catch (error) {
+            console.error("Error processing Firebase sync:", error)
+            isFirebaseSyncPaused = false
+          }
+        })
+
+        console.log("Real-time synchronization enabled")
+      } catch (error) {
+        console.error("Error setting up Firebase sync:", error)
+      }
+    }
+
+    function loadCompleteStateFromData(state) {
+      try {
+        console.log("Loading state from Firebase sync...")
+
+        // Clear existing tables
+        clearAllTables()
+
+        // Restore data without triggering saves
+        if (state.billiardRows && state.billiardRows.length > 0) {
+          state.billiardRows.forEach((rowData) => {
+            const tr = createBilliardRowFromData(rowData)
+            const tbody = document.getElementById("billiardTbody")
+            if (tbody && tr) {
+              tbody.appendChild(tr)
+              billiardRows.push(tr)
+            }
+          })
+        }
+
+        if (state.groceryRows && state.groceryRows.length > 0) {
+          state.groceryRows.forEach((rowData) => {
+            const tr = createGroceryRowFromData(rowData)
+            const tbody = document.getElementById("groceryTbody")
+            if (tbody && tr) {
+              tbody.appendChild(tr)
+              groceryRows.push(tr)
+            }
+          })
+        }
+
+        if (state.expenseRows && state.expenseRows.length > 0) {
+          state.expenseRows.forEach((rowData) => {
+            const tr = createExpenseRowFromData(rowData)
+            const tbody = document.getElementById("expenseTbody")
+            if (tbody && tr) {
+              tbody.appendChild(tr)
+              expenseRows.push(tr)
+            }
+          })
+        }
+
+        if (state.recallData) {
+          groceryRecallTableNames = state.recallData.tableNames || []
+          groceryRecallItems = state.recallData.items || []
+        }
+
+        // Update dashboard without triggering save
+        const billiardPaidEl = document.getElementById("dashboard-billiard-paid")
+        const groceryTotalEl = document.getElementById("dashboard-grocery-total")
+        const expenseTotalEl = document.getElementById("dashboard-expense-total")
+        const combinedTotalEl = document.getElementById("dashboard-combined-total")
+
+        if (billiardPaidEl) billiardPaidEl.textContent = (state.billiardPaid || 0).toFixed(2)
+        if (groceryTotalEl) groceryTotalEl.textContent = (state.groceryTotal || 0).toFixed(2)
+        if (expenseTotalEl) expenseTotalEl.textContent = (state.expenseTotal || 0).toFixed(2)
+        if (combinedTotalEl) combinedTotalEl.textContent = (state.combinedTotal || 0).toFixed(2)
+
+        filterBilliardRows()
+        console.log("Firebase sync completed")
+      } catch (error) {
+        console.error("Error loading state from Firebase sync:", error)
       }
     }
 
@@ -2290,8 +2881,7 @@
             groceryRows: historyItem.groceryRows || [],
             expenseRows: historyItem.expenseRows || [],
           }
-
-          exportToExcel(exportData, historyItem.filename)
+          exportToPDF(exportData, historyItem.filename)
         }
       } catch (error) {
         console.error("Error re-exporting shift:", error)
@@ -2315,327 +2905,7 @@
         const newWindow = window.open("", "_blank", "width=1200,height=800,scrollbars=yes,resizable=yes")
 
         // Generate HTML content for the new window
-        const htmlContent = `
-          <!DOCTYPE html>
-          <html lang="en">
-          <head>
-            <meta charset="UTF-8">
-            <title>POPSEY System - Shift Details</title>
-            <style>
-              body {
-                font-family: 'Segoe UI', 'Roboto', Arial, sans-serif;
-                background: #f4f7fa;
-                margin: 0;
-                padding: 20px;
-                color: #222b3a;
-              }
-              .header {
-                text-align: center;
-                margin-bottom: 30px;
-                padding: 20px;
-                background: #fff;
-                border-radius: 10px;
-                box-shadow: 0 2px 8px rgba(26,35,50,0.08);
-              }
-              .header h1 {
-                color: #43cea2;
-                margin: 0 0 10px 0;
-                font-size: 28px;
-              }
-              .header p {
-                margin: 5px 0;
-                font-size: 16px;
-              }
-              .summary-cards {
-                display: flex;
-                gap: 20px;
-                justify-content: center;
-                margin-bottom: 30px;
-                flex-wrap: wrap;
-              }
-              .summary-card {
-                background: #fff;
-                padding: 20px;
-                border-radius: 10px;
-                box-shadow: 0 2px 8px rgba(26,35,50,0.08);
-                text-align: center;
-                min-width: 200px;
-              }
-              .summary-card .label {
-                font-size: 14px;
-                color: #888;
-                margin-bottom: 8px;
-              }
-              .summary-card .value {
-                font-size: 24px;
-                font-weight: 700;
-                color: #43cea2;
-              }
-              .section {
-                background: #fff;
-                margin-bottom: 30px;
-                border-radius: 10px;
-                box-shadow: 0 2px 8px rgba(26,35,50,0.08);
-                overflow: hidden;
-              }
-              .section-header {
-                background: #43cea2;
-                color: #fff;
-                padding: 15px 20px;
-                font-size: 18px;
-                font-weight: 600;
-              }
-              .section-content {
-                padding: 20px;
-              }
-              table {
-                width: 100%;
-                border-collapse: collapse;
-                margin-top: 10px;
-              }
-              th, td {
-                padding: 12px 8px;
-                text-align: left;
-                border-bottom: 1px solid #e3e7ed;
-              }
-              th {
-                background: #f8f9fa;
-                font-weight: 600;
-                color: #222b3a;
-              }
-              .status-paid {
-                color: #43cea2;
-                font-weight: bold;
-                background: #eafaf6;
-                border-radius: 4px;
-                padding: 2px 6px;
-              }
-              .status-unpaid {
-                color: #dc3545;
-                font-weight: bold;
-                background: #fdeaea;
-                border-radius: 4px;
-                padding: 2px 6px;
-              }
-              .no-data {
-                text-align: center;
-                color: #888;
-                font-style: italic;
-                padding: 40px;
-              }
-              .print-btn {
-                position: fixed;
-                top: 20px;
-                right: 20px;
-                padding: 10px 20px;
-                background: #43cea2;
-                color: #fff;
-                border: none;
-                border-radius: 5px;
-                cursor: pointer;
-                font-weight: 600;
-              }
-              .print-btn:hover {
-                background: #369870;
-              }
-              @media print {
-                .print-btn { display: none; }
-                body { background: #fff; }
-                .section { box-shadow: none; border: 1px solid #ddd; }
-              }
-            </style>
-          </head>
-          <body>
-            <button class="print-btn" onclick="window.print()">Print Report</button>
-            
-            <div class="header">
-              <h1>POPSEY System - Shift Report</h1>
-              <p><strong>Date:</strong> ${historyItem.date}</p>
-              <p><strong>Generated:</strong> ${new Date().toLocaleString()}</p>
-            </div>
-            
-            <div class="summary-cards">
-              <div class="summary-card">
-                <div class="label">Billiard Total Paid</div>
-                <div class="value">₱${historyItem.billiardPaid.toFixed(2)}</div>
-              </div>
-              <div class="summary-card">
-                <div class="label">Grocery Total</div>
-                <div class="value">₱${historyItem.groceryTotal.toFixed(2)}</div>
-              </div>
-              <div class="summary-card">
-                <div class="label">Expense Total</div>
-                <div class="value">₱${(historyItem.expenseTotal || 0).toFixed(2)}</div>
-              </div>
-              <div class="summary-card">
-                <div class="label">Combined Total</div>
-                <div class="value">₱${historyItem.combinedTotal.toFixed(2)}</div>
-              </div>
-            </div>
-            
-            <div class="section">
-              <div class="section-header">📊 Billiard Transactions</div>
-              <div class="section-content">
-                ${
-                  historyItem.billiardRows && historyItem.billiardRows.length > 0
-                    ? `
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>Name</th>
-                        <th>Table Type</th>
-                        <th>Mode</th>
-                        <th>Amount/Game</th>
-                        <th>Games</th>
-                        <th>Total</th>
-                        <th>Paid</th>
-                        <th>Balance</th>
-                        <th>Status</th>
-                        <th>State</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      ${historyItem.billiardRows
-                        .map(
-                          (row) => `
-                        <tr>
-                          <td>${row.name || "N/A"}</td>
-                          <td>${row.tableType.toUpperCase()}</td>
-                          <td>${row.mode.charAt(0).toUpperCase() + row.mode.slice(1)}</td>
-                          <td>₱${row.amount.toFixed(2)}</td>
-                          <td>${row.games}</td>
-                          <td>₱${row.total.toFixed(2)}</td>
-                          <td>₱${row.paid.toFixed(2)}</td>
-                          <td>₱${row.balance.toFixed(2)}</td>
-                          <td><span class="status-${row.status.toLowerCase()}">${row.status}</span></td>
-                          <td>${row.isActive ? "Active" : "Done"}</td>
-                        </tr>
-                      `,
-                        )
-                        .join("")}
-                    </tbody>
-                  </table>
-                `
-                    : '<div class="no-data">No billiard transactions recorded</div>'
-                }
-              </div>
-            </div>
-            
-            <div class="section">
-              <div class="section-header">🛒 Grocery Transactions</div>
-              <div class="section-content">
-                ${
-                  historyItem.groceryRows && historyItem.groceryRows.length > 0
-                    ? `
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>Table/Name</th>
-                        <th>Item</th>
-                        <th>Amount/Item</th>
-                        <th>Purchases</th>
-                        <th>Total Items</th>
-                        <th>Total Amount</th>
-                        <th>Status</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      ${historyItem.groceryRows
-                        .map(
-                          (row) => `
-                        <tr>
-                          <td>${row.tableName || "N/A"}</td>
-                          <td>${row.item || "N/A"}</td>
-                          <td>₱${row.amount.toFixed(2)}</td>
-                          <td>${row.purchases}</td>
-                          <td>${row.totalItems}</td>
-                          <td>₱${row.total.toFixed(2)}</td>
-                          <td><span class="status-${row.status.toLowerCase()}">${row.status}</span></td>
-                        </tr>
-                      `,
-                        )
-                        .join("")}
-                    </tbody>
-                  </table>
-                `
-                    : '<div class="no-data">No grocery transactions recorded</div>'
-                }
-              </div>
-            </div>
-
-            <div class="section">
-              <div class="section-header">💰 Expense Transactions</div>
-              <div class="section-content">
-                ${
-                  historyItem.expenseRows && historyItem.expenseRows.length > 0
-                    ? `
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>Expense</th>
-                        <th>Amount</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      ${historyItem.expenseRows
-                        .map(
-                          (row) => `
-                        <tr>
-                          <td>${row.expense}</td>
-                          <td>₱${row.amount.toFixed(2)}</td>
-                        </tr>
-                      `,
-                        )
-                        .join("")}
-                    </tbody>
-                  </table>
-                `
-                    : '<div class="no-data">No expense transactions recorded</div>'
-                }
-              </div>
-            </div>
-            
-            <div class="section">
-              <div class="section-header">📋 Summary</div>
-              <div class="section-content">
-                <table>
-                  <tbody>
-                    <tr>
-                      <td><strong>Total Billiard Transactions:</strong></td>
-                      <td>${historyItem.billiardRows ? historyItem.billiardRows.length : 0}</td>
-                    </tr>
-                    <tr>
-                      <td><strong>Total Grocery Transactions:</strong></td>
-                      <td>${historyItem.groceryRows ? historyItem.groceryRows.length : 0}</td>
-                    </tr>
-                    <tr>
-                      <td><strong>Total Expense Transactions:</strong></td>
-                      <td>${historyItem.expenseRows ? historyItem.expenseRows.length : 0}</td>
-                    </tr>
-                    <tr>
-                      <td><strong>Billiard Revenue:</strong></td>
-                      <td>₱${historyItem.billiardPaid.toFixed(2)}</td>
-                    </tr>
-                    <tr>
-                      <td><strong>Grocery Revenue:</strong></td>
-                      <td>₱${historyItem.groceryTotal.toFixed(2)}</td>
-                    </tr>
-                    <tr>
-                      <td><strong>Expense Total:</strong></td>
-                      <td>₱${(historyItem.expenseTotal || 0).toFixed(2)}</td>
-                    </tr>
-                    <tr style="border-top: 2px solid #43cea2; font-weight: bold; font-size: 16px;">
-                      <td><strong>Total Revenue:</strong></td>
-                      <td><strong>₱${historyItem.combinedTotal.toFixed(2)}</strong></td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </body>
-          </html>
-        `
-
+        const htmlContent = generatePDFHTML(historyItem)
         newWindow.document.write(htmlContent)
         newWindow.document.close()
       } catch (error) {
@@ -2663,10 +2933,15 @@
     }
 
     // Start the application
-    if (document.readyState === "loading") {
-      document.addEventListener("DOMContentLoaded", startApplication)
-    } else {
-      startApplication()
+    try {
+      if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", startApplication)
+      } else {
+        startApplication()
+      }
+    } catch (error) {
+      console.error("Critical error in script initialization:", error)
+      alert("There was an error loading the application. Please refresh the page and try again.")
     }
   } catch (error) {
     console.error("Critical error in script initialization:", error)
