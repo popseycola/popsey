@@ -1,0 +1,715 @@
+/* Reset and base styles */
+body {
+  font-family: "Segoe UI", "Roboto", Arial, sans-serif;
+  background: #f4f7fa;
+  margin: 0;
+  min-height: 100vh;
+  color: #222b3a;
+}
+
+h1,
+h2 {
+  text-align: center;
+  font-weight: 700;
+  margin-top: 32px;
+  margin-bottom: 18px;
+  letter-spacing: 1px;
+  color: #222b3a;
+}
+
+.tabs {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+}
+
+.tab-btn {
+  padding: 10px 24px;
+  border: none;
+  background: #e3e7ed;
+  color: #222b3a;
+  font-weight: 600;
+  border-radius: 8px 8px 0 0;
+  cursor: pointer;
+  font-size: 16px;
+  transition: background 0.2s, color 0.2s;
+}
+
+.tab-btn.active {
+  background: #43cea2;
+  color: #fff;
+}
+
+.tab-content {
+  background: #fff;
+  padding: 24px;
+  border-radius: 0 0 12px 12px;
+  box-shadow: 0 4px 16px rgba(26, 35, 50, 0.08);
+  margin-bottom: 32px;
+  max-width: 1100px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.billiard-filters {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.billiard-filter-btn {
+  padding: 7px 18px;
+  border: none;
+  background: #e3e7ed;
+  color: #222b3a;
+  font-weight: 600;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 15px;
+  transition: background 0.2s, color 0.2s;
+  margin-bottom: 4px;
+}
+
+.billiard-filter-btn.active {
+  background: #43cea2;
+  color: #fff;
+}
+
+.grocery-filters {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.grocery-filter-btn {
+  padding: 7px 18px;
+  border: none;
+  background: #e3e7ed;
+  color: #222b3a;
+  font-weight: 600;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 15px;
+  transition: background 0.2s, color 0.2s;
+  margin-bottom: 4px;
+}
+
+.grocery-filter-btn.active {
+  background: #43cea2;
+  color: #fff;
+}
+
+/* Enhanced table styles with borders */
+#billiardTable,
+#expenseTable {
+  width: 100%;
+  border-collapse: collapse;
+  background: #fff;
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(26, 35, 50, 0.08);
+  margin-bottom: 24px;
+  border: 2px solid #e3e7ed;
+}
+
+#billiardTable th,
+#billiardTable td,
+#expenseTable th,
+#expenseTable td {
+  border: 1px solid #e3e7ed;
+  padding: 14px 8px;
+  text-align: center;
+  font-size: 15px;
+}
+
+#billiardTable th,
+#expenseTable th {
+  background: #e3e7ed;
+  color: #222b3a;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  border-bottom: 2px solid #43cea2;
+}
+
+.status-paid {
+  color: #43cea2;
+  font-weight: bold;
+  background: #eafaf6;
+  border-radius: 6px;
+  padding: 2px 8px;
+}
+
+.status-unpaid {
+  color: #dc3545;
+  font-weight: bold;
+  background: #fdeaea;
+  border-radius: 6px;
+  padding: 2px 8px;
+}
+
+.active-switch-btn {
+  padding: 6px 14px;
+  border-radius: 6px;
+  border: none;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  background: #1979ff;
+  color: #000000;
+  transition: background 0.2s;
+}
+
+.active-switch-btn[data-active="false"] {
+  background: hsl(125, 100%, 69%);
+  color: #000000;
+}
+
+input[type="number"],
+input[type="text"] {
+  width: 90px;
+  padding: 8px 10px;
+  border-radius: 5px;
+  border: 1px solid #b0b8c1;
+  text-align: center;
+  font-size: 14px;
+  background: #f4f7fa;
+  color: #222b3a;
+  transition: border-color 0.2s, color 0.2s;
+}
+
+input[type="number"]:focus,
+input[type="text"]:focus {
+  outline: none;
+  border-color: #43cea2;
+  background: #fff;
+}
+
+select.tableType {
+  width: 90px;
+  margin-right: 6px;
+  padding: 6px 8px;
+  border-radius: 5px;
+  border: 1px solid #b0b8c1;
+  font-size: 14px;
+  background: #f4f7fa;
+  color: #222b3a;
+  transition: border-color 0.2s;
+}
+
+select.tableType:focus {
+  border-color: #43cea2;
+  background: #fff;
+}
+
+button.mode-btn {
+  padding: 6px 12px;
+  margin-left: 4px;
+  border-radius: 5px;
+  border: none;
+  background: #e3e7ed;
+  color: #222b3a;
+  font-weight: 600;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background 0.2s;
+}
+
+button.mode-btn[data-mode="hour"] {
+  background: #43cea2;
+  color: #fff;
+}
+
+.games-value {
+  font-weight: bold;
+  margin-right: 8px;
+  font-size: 16px;
+  color: #43cea2;
+}
+
+.games-tally {
+  font-size: 18px;
+  letter-spacing: 2px;
+  margin-right: 8px;
+  color: #222b3a;
+  min-width: 50px;
+  display: inline-block;
+  vertical-align: middle;
+}
+
+.add-game-btn,
+.delete-game-btn,
+.add-paid-btn,
+.delete-row-btn,
+.expense-edit-btn,
+.expense-delete-btn {
+  padding: 6px 12px;
+  margin-right: 4px;
+  border-radius: 5px;
+  border: none;
+  background: #e3e7ed;
+  color: #222b3a;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.delete-game-btn,
+.delete-row-btn,
+.expense-delete-btn {
+  background: #dc3545;
+  color: #fff;
+}
+
+.add-game-btn:hover,
+.add-paid-btn:hover,
+.expense-edit-btn:hover {
+  background: #43cea2;
+  color: #fff;
+}
+
+.delete-game-btn:hover,
+.delete-row-btn:hover,
+.expense-delete-btn:hover {
+  background: #b21f2d;
+}
+
+.paid-value {
+  font-weight: bold;
+  margin-right: 8px;
+  color: #43cea2;
+  font-size: 16px;
+}
+
+.paid-input {
+  margin-right: 6px;
+}
+
+.paid-history {
+  margin-top: 6px;
+  font-size: 13px;
+  text-align: left;
+  min-width: 70px;
+}
+
+.paid-history-item {
+  display: flex;
+  align-items: center;
+  margin-bottom: 2px;
+}
+
+.paid-history-value {
+  margin-right: 8px;
+  color: #43cea2;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.paid-history-delete {
+  background: #dc3545;
+  color: #fff;
+  border: none;
+  border-radius: 5px;
+  font-size: 12px;
+  padding: 2px 8px;
+  cursor: pointer;
+  margin-left: 2px;
+  transition: background 0.2s;
+}
+
+.paid-history-delete:hover {
+  background: #b21f2d;
+}
+
+#addBilliardRow,
+#addExpenseBtn {
+  margin-top: 14px;
+  padding: 10px 24px;
+  background: #43cea2;
+  color: #fff;
+  border: none;
+  border-radius: 7px;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(26, 35, 50, 0.1);
+  transition: background 0.2s, box-shadow 0.2s;
+}
+
+#addBilliardRow:hover,
+#addExpenseBtn:hover {
+  background: #dc3545;
+  color: #fff;
+  box-shadow: 0 4px 16px rgba(67, 206, 162, 0.18);
+}
+
+/* Enhanced grocery table styles with borders */
+#groceryTable {
+  width: 100%;
+  border-collapse: collapse;
+  background: #fff;
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(26, 35, 50, 0.08);
+  margin-bottom: 24px;
+  border: 2px solid #e3e7ed;
+}
+
+#groceryTable th,
+#groceryTable td {
+  border: 1px solid #e3e7ed;
+  padding: 14px 8px;
+  text-align: center;
+  font-size: 15px;
+}
+
+#groceryTable th {
+  background: #e3e7ed;
+  color: #222b3a;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  border-bottom: 2px solid #43cea2;
+}
+
+.grocery-status {
+  color: #dc3545;
+  font-weight: bold;
+  background: #fdeaea;
+  border-radius: 6px;
+  padding: 2px 8px;
+  display: inline-block;
+}
+
+.grocery-status.grocery-paid {
+  color: #43cea2;
+  background: #eafaf6;
+}
+
+.grocery-status.grocery-purchase {
+  color: #007bff;
+  background: #e3f2fd;
+}
+
+/* Grocery status toggle button */
+.grocery-status-btn {
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: none;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+  min-width: 70px;
+}
+
+.grocery-status-btn.paid {
+  background: #43cea2;
+  color: #fff;
+}
+
+.grocery-status-btn.unpaid {
+  background: #dc3545;
+  color: #fff;
+}
+
+.grocery-status-btn:hover {
+  opacity: 0.8;
+}
+
+.grocery-add-purchase-btn,
+.grocery-delete-purchase-btn {
+  padding: 6px 12px;
+  margin-right: 4px;
+  border-radius: 5px;
+  border: none;
+  background: #e3e7ed;
+  color: #222b3a;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.grocery-add-purchase-btn:hover {
+  background: #43cea2;
+  color: #fff;
+}
+
+#addGroceryRow {
+  margin-top: 14px;
+  padding: 10px 24px;
+  background: #43cea2;
+  color: #fff;
+  border: none;
+  border-radius: 7px;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(26, 35, 50, 0.1);
+  transition: background 0.2s, box-shadow 0.2s;
+}
+
+#addGroceryRow:hover {
+  background: #dc3545;
+  color: #fff;
+  box-shadow: 0 4px 16px rgba(67, 206, 162, 0.18);
+}
+
+.grocery-delete-purchase-btn {
+  background: #dc3545;
+  color: #fff;
+}
+
+.grocery-delete-purchase-btn:hover {
+  background: #b21f2d;
+}
+
+#groceryTable input[type="number"],
+#groceryTable input[type="text"] {
+  width: 90px;
+  padding: 8px 10px;
+  border-radius: 5px;
+  border: 1px solid #b0b8c1;
+  text-align: center;
+  font-size: 14px;
+  background: #f4f7fa;
+  color: #222b3a;
+  transition: border-color 0.2s, color 0.2s;
+}
+
+#groceryTable input[type="number"]:focus,
+#groceryTable input[type="text"]:focus {
+  outline: none;
+  border-color: #43cea2;
+  background: #fff;
+}
+
+#groceryTable .grocery-purchases-value {
+  font-weight: bold;
+  margin-right: 8px;
+  color: #43cea2;
+  font-size: 16px;
+}
+
+#groceryTable .grocery-total-items,
+#groceryTable .grocery-total {
+  font-weight: bold;
+  color: #222b3a;
+}
+
+#grocerySearch {
+  margin-bottom: 8px;
+  border: 1px solid #b0b8c1;
+  border-radius: 5px;
+  padding: 8px 12px;
+  font-size: 15px;
+  background: #f4f7fa;
+  color: #222b3a;
+}
+
+.grocery-purchases-input {
+  margin: 0 6px;
+  width: 50px;
+  padding: 6px 8px;
+  border-radius: 5px;
+  border: 1px solid #b0b8c1;
+  background: #f4f7fa;
+  color: #222b3a;
+  font-size: 14px;
+  text-align: center;
+}
+
+.autocomplete-list {
+  position: absolute;
+  background: #fff;
+  border: 1px solid #b0b8c1;
+  border-radius: 5px;
+  z-index: 1000;
+  font-size: 14px;
+  max-height: 120px;
+  overflow-y: auto;
+  width: 90px;
+  box-shadow: 0 2px 8px rgba(26, 35, 50, 0.08);
+}
+.autocomplete-list div {
+  padding: 6px 10px;
+  cursor: pointer;
+}
+.autocomplete-list div:hover {
+  background: #43cea2;
+  color: #fff;
+}
+
+.recall-list {
+  position: absolute;
+  background: #fff;
+  border: 1px solid #b0b8c1;
+  border-radius: 5px;
+  z-index: 1000;
+  font-size: 14px;
+  max-height: 120px;
+  overflow-y: auto;
+  width: 90px;
+  box-shadow: 0 2px 8px rgba(26, 35, 50, 0.08);
+}
+.recall-list div {
+  padding: 6px 10px;
+  cursor: pointer;
+}
+.recall-list div:hover {
+  background: #43cea2;
+  color: #fff;
+}
+
+/* Dashboard card styles */
+.dashboard-card {
+  background: #e3e7ed;
+  border-radius: 8px;
+  padding: 18px 32px;
+  min-width: 180px;
+  box-shadow: 0 2px 8px rgba(67, 206, 162, 0.08);
+  text-align: center;
+}
+.dashboard-label {
+  font-size: 15px;
+  color: #888;
+  margin-bottom: 8px;
+}
+.dashboard-value {
+  font-size: 28px;
+  font-weight: 700;
+  color: #43cea2;
+}
+
+/* Live clock and date styles */
+.dashboard-datetime {
+  text-align: center;
+  margin-bottom: 18px;
+}
+
+.dashboard-date {
+  font-size: 20px;
+  font-weight: 600;
+  color: #222b3a;
+  margin-bottom: 4px;
+}
+
+.dashboard-time {
+  font-size: 24px;
+  font-weight: 700;
+  color: #43cea2;
+  font-family: "Courier New", monospace;
+  margin-bottom: 6px;
+}
+
+.dashboard-tabs {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  margin-bottom: 12px;
+}
+.dashboard-tab-btn {
+  padding: 8px 22px;
+  border: none;
+  background: #e3e7ed;
+  color: #222b3a;
+  font-weight: 600;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 15px;
+  transition: background 0.2s, color 0.2s;
+}
+.dashboard-tab-btn.active {
+  background: #43cea2;
+  color: #fff;
+}
+.dashboard-tab-content {
+  margin-top: 10px;
+}
+
+/* History table with borders */
+#dashboardHistoryTable {
+  width: 100%;
+  border-collapse: collapse;
+  background: #fff;
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(26, 35, 50, 0.08);
+  border: 2px solid #e3e7ed;
+}
+
+#dashboardHistoryTable th,
+#dashboardHistoryTable td {
+  border: 1px solid #e3e7ed;
+  padding: 14px 8px;
+  text-align: center;
+  font-weight: 700;
+}
+
+#dashboardHistoryTable th {
+  background: #e3e7ed;
+  color: #222b3a;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  border-bottom: 2px solid #43cea2;
+}
+
+/* Expense table specific styles */
+.expense-name {
+  font-weight: bold;
+  color: #222b3a;
+}
+
+.expense-amount {
+  font-weight: bold;
+  color: #43cea2;
+  font-size: 16px;
+}
+
+/* Responsive adjustments */
+@media (max-width: 900px) {
+  .tab-content {
+    padding: 12px 2px 12px 2px;
+  }
+  #billiardTable th,
+  #billiardTable td,
+  #groceryTable th,
+  #groceryTable td,
+  #expenseTable th,
+  #expenseTable td,
+  #dashboardHistoryTable th,
+  #dashboardHistoryTable td {
+    padding: 8px 2px;
+    font-size: 13px;
+  }
+  .tabs {
+    flex-direction: column;
+    align-items: center;
+  }
+  .billiard-filters {
+    flex-direction: column;
+    align-items: center;
+  }
+}
+
+.grocery-delete-row-btn {
+  padding: 6px 12px;
+  border-radius: 5px;
+  border: none;
+  background: #dc3545;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  margin-left: 4px;
+  transition: background 0.2s;
+}
+.grocery-delete-row-btn:hover {
+  background: #b21f2d;
+}
