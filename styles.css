@@ -175,6 +175,192 @@ h2 {
   color: #fff;
 }
 
+/* Calculator Button Styles */
+.calculator-btn {
+  padding: 10px 24px;
+  border: none;
+  background: #007bff;
+  color: #fff;
+  font-weight: 600;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 16px;
+  transition: background 0.2s, color 0.2s;
+  margin-left: 8px;
+}
+
+.calculator-btn:hover {
+  background: #0056b3;
+}
+
+.calculator-btn.active {
+  background: #0056b3;
+  box-shadow: 0 0 10px rgba(0, 123, 255, 0.5);
+}
+
+/* Calculator Sidebar Styles */
+.calculator-sidebar {
+  position: fixed;
+  top: 0;
+  right: -350px;
+  width: 350px;
+  height: 100vh;
+  background: #fff;
+  box-shadow: -2px 0 10px rgba(0, 0, 0, 0.1);
+  z-index: 1001;
+  transition: right 0.3s ease;
+  display: flex;
+  flex-direction: column;
+}
+
+.calculator-sidebar.open {
+  right: 0;
+}
+
+.calculator-header {
+  background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
+  color: #fff;
+  padding: 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.calculator-header h3 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.close-calculator {
+  background: none;
+  border: none;
+  color: #fff;
+  font-size: 24px;
+  cursor: pointer;
+  padding: 0;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: background 0.2s;
+}
+
+.close-calculator:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.calculator-body {
+  flex: 1;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+}
+
+.calculator-displays {
+  margin-bottom: 20px;
+}
+
+.calculator-expression {
+  width: 100%;
+  padding: 15px;
+  border: 2px solid #e3e7ed;
+  border-radius: 8px;
+  font-size: 16px;
+  font-family: "Courier New", monospace;
+  background: #f8f9fa;
+  color: #495057;
+  margin-bottom: 10px;
+  text-align: right;
+  box-sizing: border-box;
+}
+
+.calculator-result {
+  width: 100%;
+  padding: 15px;
+  border: 2px solid #007bff;
+  border-radius: 8px;
+  font-size: 24px;
+  font-weight: 700;
+  font-family: "Courier New", monospace;
+  background: #e3f2fd;
+  color: #0056b3;
+  text-align: right;
+  box-sizing: border-box;
+}
+
+.calculator-buttons {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  flex: 1;
+}
+
+.calc-btn {
+  padding: 20px;
+  border: none;
+  border-radius: 8px;
+  font-size: 18px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  background: #f8f9fa;
+  color: #495057;
+  border: 1px solid #dee2e6;
+}
+
+.calc-btn:hover {
+  background: #e9ecef;
+  transform: translateY(-1px);
+}
+
+.calc-btn:active {
+  transform: translateY(0);
+}
+
+.calc-btn-operator {
+  background: #007bff;
+  color: #fff;
+}
+
+.calc-btn-operator:hover {
+  background: #0056b3;
+}
+
+.calc-btn-equals {
+  background: #28a745;
+  color: #fff;
+  grid-row: span 2;
+}
+
+.calc-btn-equals:hover {
+  background: #1e7e34;
+}
+
+.calc-btn-clear {
+  background: #dc3545;
+  color: #fff;
+}
+
+.calc-btn-clear:hover {
+  background: #c82333;
+}
+
+.calc-btn-delete {
+  background: #ffc107;
+  color: #212529;
+}
+
+.calc-btn-delete:hover {
+  background: #e0a800;
+}
+
+.calc-btn-zero {
+  grid-column: span 2;
+}
+
 .tab-content {
   background: #fff;
   padding: 24px;
@@ -305,7 +491,7 @@ h2 {
 
 input[type="number"],
 input[type="text"] {
-  width: 90px;
+  width: 250px;
   padding: 8px 10px;
   border-radius: 5px;
   border: 1px solid #b0b8c1;
@@ -805,8 +991,25 @@ button.mode-btn[data-mode="hour"] {
   font-size: 16px;
 }
 
+/* Table Total Styles */
+.table-total {
+  text-align: center;
+  margin-top: 15px;
+  padding: 12px;
+  background: linear-gradient(135deg, #43cea2 0%, #185a9d 100%);
+  color: #fff;
+  border-radius: 8px;
+  font-size: 18px;
+  box-shadow: 0 2px 8px rgba(67, 206, 162, 0.3);
+}
+
 /* Responsive adjustments */
 @media (max-width: 900px) {
+  .calculator-sidebar {
+    width: 100%;
+    right: -100%;
+  }
+
   .tab-content {
     padding: 12px 2px 12px 2px;
   }
@@ -845,6 +1048,11 @@ button.mode-btn[data-mode="hour"] {
 
   .tabs {
     margin-top: 20px;
+  }
+
+  .calculator-btn {
+    margin-left: 0;
+    margin-top: 8px;
   }
 }
 

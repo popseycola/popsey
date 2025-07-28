@@ -13,11 +13,16 @@
     let isFirebaseSyncPaused = false // Prevent sync loops
     let lastSaveTimestamp = 0 // Prevent duplicate saves
     let isInitialLoad = true // Track if this is the first load
+    let shiftStartTime = null // Track shift start time
 
     // Firebase variables - will be initialized later
     let database = null
     let storage = null
     let firebaseInitialized = false
+
+    // Enhanced Calculator variables
+    let calculatorExpression = ""
+    let calculatorResult = "0"
 
     // --- Authentication System ---
     const VALID_USERNAME = "popseyadmin"
@@ -153,6 +158,253 @@
         }
       } catch (error) {
         console.error("Error setting up authentication listeners:", error)
+      }
+    }
+
+    // --- Enhanced Calculator Functions ---
+    function toggleCalculator() {
+      try {
+        const sidebar = document.getElementById("calculatorSidebar")
+        const btn = document.getElementById("calculatorBtn")
+
+        if (sidebar.classList.contains("open")) {
+          sidebar.classList.remove("open")
+          btn.classList.remove("active")
+        } else {
+          sidebar.classList.add("open")
+          btn.classList.add("active")
+        }
+      } catch (error) {
+        console.error("Error toggling calculator:", error)
+      }
+    }
+
+    function closeCalculator() {
+      try {
+        const sidebar = document.getElementById("calculatorSidebar")
+        const btn = document.getElementById("calculatorBtn")
+        sidebar.classList.remove("open")
+        btn.classList.remove("active")
+      } catch (error) {
+        console.error("Error closing calculator:", error)
+      }
+    }
+
+    function updateCalculatorDisplays() {
+      try {
+        const expressionDisplay = document.getElementById("calculatorExpression")
+        const resultDisplay = document.getElementById("calculatorResult")
+
+        if (expressionDisplay) {
+          expressionDisplay.value = calculatorExpression || ""
+        }
+
+        if (resultDisplay) {
+          resultDisplay.value = calculatorResult
+        }
+      } catch (error) {
+        console.error("Error updating calculator displays:", error)
+      }
+    }
+
+    function evaluateExpression(expression) {
+      try {
+        if (!expression || expression.trim() === "") {
+          return "0"
+        }
+
+        // Replace display symbols with JavaScript operators
+        const jsExpression = expression.replace(/×/g, "*").replace(/÷/g, "/")
+
+        // Basic validation - only allow numbers, operators, and decimal points
+        if (!/^[0-9+\-*/.() ]+$/.test(jsExpression)) {
+          return "Error"
+        }
+
+        // Evaluate the expression safely
+        const result = Function('"use strict"; return (' + jsExpression + ")")()
+
+        if (isNaN(result) || !isFinite(result)) {
+          return "Error"
+        }
+
+        return result.toString()
+      } catch (error) {
+        return "Error"
+      }
+    }
+
+    function clearCalculator() {
+      try {
+        calculatorExpression = ""
+        calculatorResult = "0"
+        updateCalculatorDisplays()
+      } catch (error) {
+        console.error("Error clearing calculator:", error)
+      }
+    }
+
+    function deleteLast() {
+      try {
+        if (calculatorExpression.length > 0) {
+          calculatorExpression = calculatorExpression.slice(0, -1)
+          calculatorResult = evaluateExpression(calculatorExpression)
+          updateCalculatorDisplays()
+        }
+      } catch (error) {
+        console.error("Error deleting last character:", error)
+      }
+    }
+
+    function appendToCalculator(value) {
+      try {
+        // Handle operators
+        if (["+", "-", "*", "/", "×", "÷"].includes(value)) {
+          // Convert display symbols to standard symbols for internal storage
+          const standardValue = value === "×" ? "*" : value === "÷" ? "/" : value
+
+          // Don't allow consecutive operators
+          const lastChar = calculatorExpression.slice(-1)
+          if (["+", "-", "*", "/"].includes(lastChar)) {
+            // Replace the last operator
+            calculatorExpression = calculatorExpression.slice(0, -1) + standardValue
+          } else if (calculatorExpression !== "") {
+            calculatorExpression += standardValue
+          }
+        } else {
+          // Handle numbers and decimal points
+          calculatorExpression += value
+        }
+
+        // Update result in real-time
+        calculatorResult = evaluateExpression(calculatorExpression)
+        updateCalculatorDisplays()
+      } catch (error) {
+        console.error("Error appending to calculator:", error)
+      }
+    }
+
+    function calculateResult() {
+      try {
+        if (calculatorExpression !== "") {
+          calculatorResult = evaluateExpression(calculatorExpression)
+          calculatorExpression = calculatorResult
+          updateCalculatorDisplays()
+        }
+      } catch (error) {
+        console.error("Error calculating result:", error)
+      }
+    }
+
+    // Make calculator functions global for onclick handlers
+    window.clearCalculator = clearCalculator
+    window.deleteLast = deleteLast
+    window.appendToCalculator = appendToCalculator
+    window.calculateResult = calculateResult
+
+    // --- Shift Management Functions ---
+    function handleStartShift() {
+      try {
+        if (shiftStartTime) {
+          alert("Shift has already been started!")
+          return
+        }
+
+        const now = new Date()
+        shiftStartTime = now.toLocaleString()
+
+        // Save to localStorage
+        localStorage.setItem("popsey_shift_start_time", shiftStartTime)
+
+        // Update display
+        updateShiftStartDisplay()
+
+        // Save to Firebase
+        if (!isInitialLoad && !isFirebaseSyncPaused) {
+          triggerAutoSave("shift_start", true)
+        }
+
+        alert(`Shift started at ${shiftStartTime}`)
+      } catch (error) {
+        console.error("Error starting shift:", error)
+      }
+    }
+
+    function updateShiftStartDisplay() {
+      try {
+        const display = document.getElementById("shiftStartDisplay")
+        if (display) {
+          if (shiftStartTime) {
+            display.textContent = `Shift Started: ${shiftStartTime}`
+            display.style.color = "#28a745"
+          } else {
+            display.textContent = "Shift Status: Not Started"
+            display.style.color = "#dc3545"
+          }
+        }
+      } catch (error) {
+        console.error("Error updating shift start display:", error)
+      }
+    }
+
+    function loadShiftStartTime() {
+      try {
+        const savedTime = localStorage.getItem("popsey_shift_start_time")
+        if (savedTime) {
+          shiftStartTime = savedTime
+          updateShiftStartDisplay()
+        }
+      } catch (error) {
+        console.error("Error loading shift start time:", error)
+      }
+    }
+
+    // --- Table Total Display Functions ---
+    function updateBilliardTotal() {
+      try {
+        let visibleTotal = 0
+        const billiardRows = document.querySelectorAll("#billiardTbody tr")
+
+        billiardRows.forEach((row) => {
+          if (row.style.display !== "none") {
+            const paidElement = row.querySelector(".paid-value")
+            if (paidElement) {
+              const paid = Number.parseFloat(paidElement.textContent) || 0
+              visibleTotal += paid
+            }
+          }
+        })
+
+        const totalDisplay = document.getElementById("billiardVisibleTotal")
+        if (totalDisplay) {
+          totalDisplay.textContent = visibleTotal.toFixed(2)
+        }
+      } catch (error) {
+        console.error("Error updating billiard total:", error)
+      }
+    }
+
+    function updateGroceryTotal() {
+      try {
+        let visibleTotal = 0
+        const groceryRows = document.querySelectorAll("#groceryTbody tr")
+
+        groceryRows.forEach((row) => {
+          if (row.style.display !== "none") {
+            const totalElement = row.querySelector(".grocery-total")
+            if (totalElement) {
+              const total = Number.parseFloat(totalElement.textContent) || 0
+              visibleTotal += total
+            }
+          }
+        })
+
+        const totalDisplay = document.getElementById("groceryVisibleTotal")
+        if (totalDisplay) {
+          totalDisplay.textContent = visibleTotal.toFixed(2)
+        }
+      } catch (error) {
+        console.error("Error updating grocery total:", error)
       }
     }
 
@@ -316,6 +568,7 @@
         return {
           timestamp: currentTime,
           date: new Date().toLocaleDateString() + " " + new Date().toLocaleTimeString(),
+          shiftStartTime: shiftStartTime,
           billiardPaid,
           groceryTotal,
           expenseTotal,
@@ -336,6 +589,7 @@
         return {
           timestamp: Date.now(),
           date: new Date().toLocaleDateString() + " " + new Date().toLocaleTimeString(),
+          shiftStartTime: shiftStartTime,
           billiardPaid: 0,
           groceryTotal: 0,
           expenseTotal: 0,
@@ -387,6 +641,12 @@
             `Loading saved state: ${state.billiardRowsCount || 0} billiard rows, ${state.groceryRowsCount || 0} grocery rows, ${state.expenseRowsCount || 0} expense rows`,
           )
 
+          // Load shift start time
+          if (state.shiftStartTime) {
+            shiftStartTime = state.shiftStartTime
+            updateShiftStartDisplay()
+          }
+
           // Clear existing tables first
           clearAllTables()
 
@@ -432,8 +692,10 @@
             groceryRecallItems = state.recallData.items || []
           }
 
-          // Update dashboard
+          // Update dashboard and totals
           updateDashboardValues()
+          updateBilliardTotal()
+          updateGroceryTotal()
           filterBilliardRows()
           console.log(
             `Data loaded successfully: ${billiardRows.length} billiard rows, ${groceryRows.length} grocery rows, ${expenseRows.length} expense rows`,
@@ -887,6 +1149,9 @@
         // Initialize Firebase after DOM is loaded
         initializeFirebase()
 
+        // Load shift start time
+        loadShiftStartTime()
+
         // Set up initial tab visibility
         document.querySelectorAll(".tab-content").forEach((tab) => (tab.style.display = "none"))
         const dashboardTab = document.getElementById("dashboard")
@@ -932,7 +1197,12 @@
 
         // Initial dashboard update and history load
         updateDashboardValues()
+        updateBilliardTotal()
+        updateGroceryTotal()
         loadShiftHistoryTable()
+
+        // Initialize calculator displays
+        updateCalculatorDisplays()
 
         // ENHANCED: Set up Firebase sync AFTER initial load is complete
         setTimeout(() => {
@@ -1125,6 +1395,7 @@
         }
 
         filterBilliardRows()
+        updateBilliardTotal()
 
         // ENHANCED: Trigger immediate save for critical actions
         if (!isInitialLoad && !isFirebaseSyncPaused) {
@@ -1386,6 +1657,7 @@
         // If 'all' is active, show all rows
         if (activeFilters.includes("all") || activeFilters.length === 0) {
           billiardRows.forEach((row) => (row.style.display = ""))
+          updateBilliardTotal()
           return
         }
 
@@ -1417,6 +1689,8 @@
 
           row.style.display = show ? "" : "none"
         })
+
+        updateBilliardTotal()
       } catch (error) {
         console.error("Error filtering billiard rows:", error)
       }
@@ -1433,6 +1707,7 @@
         // If 'all' is active, show all rows
         if (activeFilters.includes("all") || activeFilters.length === 0) {
           groceryRows.forEach((row) => (row.style.display = ""))
+          updateGroceryTotal()
           return
         }
 
@@ -1460,6 +1735,8 @@
 
           row.style.display = show ? "" : "none"
         })
+
+        updateGroceryTotal()
       } catch (error) {
         console.error("Error filtering grocery rows:", error)
       }
@@ -2079,6 +2356,7 @@
         // Get current data for export and history
         const currentData = {
           date: getTodayDate(),
+          shiftStartTime: shiftStartTime || "Start shift not reported",
           billiardPaid: Number.parseFloat(document.getElementById("dashboard-billiard-paid")?.textContent) || 0,
           groceryTotal: Number.parseFloat(document.getElementById("dashboard-grocery-total")?.textContent) || 0,
           expenseTotal: Number.parseFloat(document.getElementById("dashboard-expense-total")?.textContent) || 0,
@@ -2091,8 +2369,11 @@
         // Save to history first
         const historyItem = saveShiftHistory(currentData)
 
-        // Reset tables to empty state
+        // Reset tables to empty state and clear shift start time
         resetAllTables()
+        shiftStartTime = null
+        localStorage.removeItem("popsey_shift_start_time")
+        updateShiftStartDisplay()
 
         // Reload history table
         loadShiftHistoryTable()
@@ -2116,6 +2397,24 @@
     // --- Event Listeners Setup ---
     function setupEventListeners() {
       try {
+        // Calculator toggle button
+        const calculatorBtn = document.getElementById("calculatorBtn")
+        if (calculatorBtn) {
+          calculatorBtn.addEventListener("click", toggleCalculator)
+        }
+
+        // Calculator close button
+        const closeCalculatorBtn = document.getElementById("closeCalculator")
+        if (closeCalculatorBtn) {
+          closeCalculatorBtn.addEventListener("click", closeCalculator)
+        }
+
+        // Start shift button
+        const startShiftBtn = document.getElementById("startShiftBtn")
+        if (startShiftBtn) {
+          startShiftBtn.addEventListener("click", handleStartShift)
+        }
+
         // Filter button logic
         document.querySelectorAll(".billiard-filter-btn").forEach((btn) => {
           btn.addEventListener("click", () => {
@@ -2282,6 +2581,7 @@
                 row.style.display = matches ? "" : "none"
               }
             })
+            updateGroceryTotal()
           })
         }
 
@@ -2301,6 +2601,7 @@
           exportCurrentBtn.addEventListener("click", () => {
             const currentData = {
               date: getTodayDate(),
+              shiftStartTime: shiftStartTime || "Start shift not reported",
               billiardPaid: Number.parseFloat(document.getElementById("dashboard-billiard-paid")?.textContent) || 0,
               groceryTotal: Number.parseFloat(document.getElementById("dashboard-grocery-total")?.textContent) || 0,
               expenseTotal: Number.parseFloat(document.getElementById("dashboard-expense-total")?.textContent) || 0,
@@ -2376,6 +2677,7 @@
           tr.style.borderBottom = "1px solid #e3e7ed"
           tr.innerHTML = `
             <td style="padding:12px 8px; text-align:center;">${row.date}</td>
+            <td style="padding:12px 8px; text-align:center; color:#28a745; font-weight:600;">${row.shiftStartTime || "Not reported"}</td>
             <td style="padding:12px 8px; text-align:center; color:#43cea2; font-weight:600;">${row.billiardPaid.toFixed(2)}</td>
             <td style="padding:12px 8px; text-align:center; color:#43cea2; font-weight:600;">${row.groceryTotal.toFixed(2)}</td>
             <td style="padding:12px 8px; text-align:center; color:#43cea2; font-weight:600;">${(row.expenseTotal || 0).toFixed(2)}</td>
@@ -2391,7 +2693,7 @@
 
         if (history.length === 0) {
           const tr = document.createElement("tr")
-          tr.innerHTML = `<td colspan="6" style="padding:20px; text-align:center; color:#888; font-style:italic;">No shift history available</td>`
+          tr.innerHTML = `<td colspan="7" style="padding:20px; text-align:center; color:#888; font-style:italic;">No shift history available</td>`
           tbody.appendChild(tr)
         }
       } catch (error) {
@@ -2410,6 +2712,7 @@
         const historyItem = {
           id: Date.now(),
           date: data.date,
+          shiftStartTime: data.shiftStartTime,
           billiardPaid: data.billiardPaid,
           groceryTotal: data.groceryTotal,
           expenseTotal: data.expenseTotal || 0,
@@ -2681,6 +2984,7 @@
           <div class="header">
             <h1>🎱 POPSEY System - Shift Report</h1>
             <p><strong>📅 Shift Date:</strong> ${data.date}</p>
+            <p><strong>⏰ Shift Started:</strong> ${data.shiftStartTime}</p>
             <p><strong>🕒 Generated:</strong> ${new Date().toLocaleString()}</p>
           </div>
           
@@ -2831,6 +3135,10 @@
               <table>
                 <tbody>
                   <tr>
+                    <td><strong>⏰ Shift Started:</strong></td>
+                    <td><strong>${data.shiftStartTime}</strong></td>
+                  </tr>
+                  <tr>
                     <td><strong>📊 Total Billiard Transactions:</strong></td>
                     <td><strong>${data.billiardRows ? data.billiardRows.length : 0}</strong></td>
                   </tr>
@@ -2967,6 +3275,12 @@
           `Remote state: ${state.billiardRowsCount || 0} billiard, ${state.groceryRowsCount || 0} grocery, ${state.expenseRowsCount || 0} expense rows`,
         )
 
+        // Load shift start time
+        if (state.shiftStartTime) {
+          shiftStartTime = state.shiftStartTime
+          updateShiftStartDisplay()
+        }
+
         // Clear existing tables
         clearAllTables()
 
@@ -3024,6 +3338,8 @@
         if (combinedTotalEl) combinedTotalEl.textContent = (state.combinedTotal || 0).toFixed(2)
 
         filterBilliardRows()
+        updateBilliardTotal()
+        updateGroceryTotal()
         console.log(
           `Firebase sync completed: ${billiardRows.length} billiard, ${groceryRows.length} grocery, ${expenseRows.length} expense rows restored`,
         )
@@ -3080,6 +3396,7 @@
           // Create export data object
           const exportData = {
             date: historyItem.date,
+            shiftStartTime: historyItem.shiftStartTime || "Start shift not reported",
             billiardPaid: historyItem.billiardPaid,
             groceryTotal: historyItem.groceryTotal,
             expenseTotal: historyItem.expenseTotal || 0,

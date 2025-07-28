@@ -44,7 +44,47 @@
       <button class="tab-btn" data-tab="billiard">Billiard</button>
       <button class="tab-btn" data-tab="grocery">Grocery</button>
       <button class="tab-btn" data-tab="expense">Expense</button>
+      <button id="calculatorBtn" class="calculator-btn">Calculator</button>
     </div>
+
+    <!-- Calculator Sidebar -->
+    <div id="calculatorSidebar" class="calculator-sidebar">
+      <div class="calculator-header">
+        <h3>Calculator</h3>
+        <button id="closeCalculator" class="close-calculator">×</button>
+      </div>
+      <div class="calculator-body">
+        <div class="calculator-displays">
+          <input type="text" id="calculatorExpression" class="calculator-expression" readonly placeholder="Enter expression...">
+          <input type="text" id="calculatorResult" class="calculator-result" readonly placeholder="0">
+        </div>
+        <div class="calculator-buttons">
+          <button onclick="clearCalculator()" class="calc-btn calc-btn-clear">C</button>
+          <button onclick="deleteLast()" class="calc-btn calc-btn-delete">⌫</button>
+          <button onclick="appendToCalculator('/')" class="calc-btn calc-btn-operator">÷</button>
+          <button onclick="appendToCalculator('*')" class="calc-btn calc-btn-operator">×</button>
+          
+          <button onclick="appendToCalculator('7')" class="calc-btn">7</button>
+          <button onclick="appendToCalculator('8')" class="calc-btn">8</button>
+          <button onclick="appendToCalculator('9')" class="calc-btn">9</button>
+          <button onclick="appendToCalculator('-')" class="calc-btn calc-btn-operator">-</button>
+          
+          <button onclick="appendToCalculator('4')" class="calc-btn">4</button>
+          <button onclick="appendToCalculator('5')" class="calc-btn">5</button>
+          <button onclick="appendToCalculator('6')" class="calc-btn">6</button>
+          <button onclick="appendToCalculator('+')" class="calc-btn calc-btn-operator">+</button>
+          
+          <button onclick="appendToCalculator('1')" class="calc-btn">1</button>
+          <button onclick="appendToCalculator('2')" class="calc-btn">2</button>
+          <button onclick="appendToCalculator('3')" class="calc-btn">3</button>
+          <button onclick="calculateResult()" class="calc-btn calc-btn-equals" rowspan="2">=</button>
+          
+          <button onclick="appendToCalculator('0')" class="calc-btn calc-btn-zero">0</button>
+          <button onclick="appendToCalculator('.')" class="calc-btn">.</button>
+        </div>
+      </div>
+    </div>
+
     <div class="tab-content" id="dashboard">
       <h2>Main Dashboard</h2>
       <div class="dashboard-datetime">
@@ -56,6 +96,7 @@
           <span id="sync-status" style="margin-left:10px; color:#888;">✓ Synced</span>
           <span id="last-save" style="margin-left:10px; color:#666; font-size:12px;">Last saved: Never</span>
         </div>
+        <div id="shiftStartDisplay" style="font-size:16px; margin-top:8px; font-weight:600;">Shift Status: Not Started</div>
       </div>
       <div style="display:flex; gap:24px; justify-content:center; margin-bottom:24px; flex-wrap: wrap;">
         <div class="dashboard-card">
@@ -76,6 +117,7 @@
         </div>
       </div>
       <div style="text-align:center; margin-bottom:18px;">
+        <button id="startShiftBtn" style="padding:10px 28px; font-size:17px; font-weight:700; border-radius:7px; background:#28a745; color:#fff; border:none; cursor:pointer; margin-right:10px;">Start Shift</button>
         <button id="endShiftBtn" style="padding:10px 28px; font-size:17px; font-weight:700; border-radius:7px; background:#43cea2; color:#fff; border:none; cursor:pointer; margin-right:10px;">End Shift & Reset</button>
         <button id="exportCurrentBtn" style="padding:10px 28px; font-size:17px; font-weight:700; border-radius:7px; background:#007bff; color:#fff; border:none; cursor:pointer; margin-right:10px;">Export Current Data</button>
         <button id="loadDataBtn" style="padding:10px 28px; font-size:17px; font-weight:700; border-radius:7px; background:#28a745; color:#fff; border:none; cursor:pointer;">Load Saved Data</button>
@@ -91,6 +133,7 @@
         <thead>
           <tr>
             <th>Date & Time</th>
+            <th>Shift Started</th>
             <th>Billiard Paid</th>
             <th>Grocery Total</th>
             <th>Expense Total</th>
@@ -133,40 +176,12 @@
           </tr>
         </thead>
         <tbody id="billiardTbody">
-          <tr>
-            <td>
-              <button class="active-switch-btn" data-active="true">Active</button>
-            </td>
-            <td class="status status-unpaid">Unpaid</td>
-            <td>
-              <select class="tableType">
-                <option value="m8">M8</option>
-                <option value="m7">M7</option>
-                <option value="alpha">Alpha</option>
-                <option value="regal">Regal</option>
-              </select>
-              <button class="mode-btn" data-mode="mesada">Mesada</button>
-            </td>
-            <td><input type="number" class="amount" value="15" readonly></td>
-            <td>
-              <span class="games-value">0</span>
-              <div class="games-tally" style="display:inline-block;vertical-align:middle;"></div>
-              <button class="add-game-btn">Add</button>
-              <button class="delete-game-btn">Delete</button>
-            </td>
-            <td class="total">0</td>
-            <td>
-              <span class="paid-value">0</span>
-              <input type="number" class="paid-input" value="0" min="0" style="width:60px;">
-              <button class="add-paid-btn">Add</button>
-              <div class="paid-history"></div>
-            </td>
-            <td class="totalPaid">0</td>
-            <td class="balance">0</td>
-            <td><input type="text" class="name"></td>
-          </tr>
+          <!-- Rows will be added dynamically -->
         </tbody>
       </table>
+      <div class="table-total">
+        <strong>Total Paid (Visible): ₱<span id="billiardVisibleTotal">0.00</span></strong>
+      </div>
     </div>
     <div class="tab-content" id="grocery" style="display:none;">
       <h2>Grocery Transactions</h2>
@@ -194,25 +209,12 @@
           </tr>
         </thead>
         <tbody id="groceryTbody">
-          <tr>
-            <td class="grocery-status-cell"><span class="grocery-status grocery-purchase">Purchase</span></td>
-            <td><input type="text" class="grocery-table"></td>
-            <td><input type="text" class="grocery-item"></td>
-            <td><input type="number" class="grocery-amount" value="0"></td>
-            <td>
-              <span class="grocery-purchases-value">0</span>
-              <input type="number" class="grocery-purchases-input" value="1" min="1" style="width:50px;">
-              <button class="grocery-add-purchase-btn">Add</button>
-              <button class="grocery-delete-purchase-btn">Delete</button>
-            </td>
-            <td class="grocery-total-items">0</td>
-            <td class="grocery-total">0</td>
-            <td>
-              <button class="grocery-delete-row-btn" title="Delete Row">Delete</button>
-            </td>
-          </tr>
+          <!-- Rows will be added dynamically -->
         </tbody>
       </table>
+      <div class="table-total">
+        <strong>Total Amount (Visible): ₱<span id="groceryVisibleTotal">0.00</span></strong>
+      </div>
     </div>
 
     <!-- New Expense Tab -->
