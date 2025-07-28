@@ -2740,33 +2740,66 @@
       }
     }
 
-    // --- Fixed PDF Export Functions ---
     function exportToPDF(data, filename) {
-      try {
-        console.log("Generating PDF export...")
+  try {
+    console.log("Generating PDF export...")
 
-        // Generate HTML content
-        const htmlContent = generatePDFHTML(data)
+    // Generate HTML content
+    const htmlContent = generatePDFHTML(data)
 
-        // Create a blob with the HTML content for download
-        const blob = new Blob([htmlContent], { type: "text/html" })
-        const url = URL.createObjectURL(blob)
+    // Check if the browser supports the File System Access API
+    if ('showSaveFilePicker' in window) {
+      // Modern browsers - show save dialog
+      showSaveDialog(htmlContent, filename.replace(".pdf", ".html"))
+    } else {
+      // Fallback for older browsers - regular download
+      const blob = new Blob([htmlContent], { type: "text/html" })
+      const url = URL.createObjectURL(blob)
 
-        // Create a temporary link and trigger download
-        const a = document.createElement("a")
-        a.href = url
-        a.download = filename.replace(".pdf", ".html")
-        document.body.appendChild(a)
-        a.click()
-        document.body.removeChild(a)
-        URL.revokeObjectURL(url)
-
-        console.log("PDF export completed")
-      } catch (error) {
-        console.error("Error exporting to PDF:", error)
-        alert("Error generating PDF export. Please try again.")
-      }
+      const a = document.createElement("a")
+      a.href = url
+      a.download = filename.replace(".pdf", ".html")
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
     }
+
+    console.log("PDF export completed")
+  } catch (error) {
+    console.error("Error exporting to PDF:", error)
+    alert("Error generating PDF export. Please try again.")
+  }
+}
+
+// New function to handle the save dialog
+async function showSaveDialog(content, suggestedName) {
+  try {
+    const fileHandle = await window.showSaveFilePicker({
+      suggestedName: suggestedName,
+      types: [
+        {
+          description: 'HTML files',
+          accept: {
+            'text/html': ['.html'],
+          },
+        },
+      ],
+    })
+
+    const writable = await fileHandle.createWritable()
+    await writable.write(content)
+    await writable.close()
+
+    alert('File saved successfully!')
+  } catch (error) {
+    if (error.name !== 'AbortError') {
+      console.error('Error saving file:', error)
+      alert('Error saving file. Please try again.')
+    }
+    // If user cancels, do nothing (AbortError)
+  }
+}
 
     // --- Enhanced PDF Generation with Better Styling ---
     function generatePDFHTML(data) {
