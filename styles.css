@@ -275,6 +275,8 @@ h2 {
   margin-bottom: 10px;
   text-align: right;
   box-sizing: border-box;
+  min-width: 200px;  /* Add this to make it taller */
+  resize: horizontal;   /* Add this to allow manual resizing */
 }
 
 .calculator-result {
@@ -491,7 +493,7 @@ h2 {
 
 input[type="number"],
 input[type="text"] {
-  width: 250px;
+  width: 90px;
   padding: 8px 10px;
   border-radius: 5px;
   border: 1px solid #b0b8c1;
