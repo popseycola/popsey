@@ -1,4 +1,4 @@
-;(() => {
+(() => {
   // Wrap everything in a try-catch to prevent any uncaught errors
   try {
     // --- Global Variables ---
@@ -14,6 +14,7 @@
     let lastSaveTimestamp = 0 // Prevent duplicate saves
     let isInitialLoad = true // Track if this is the first load
     let shiftStartTime = null // Track shift start time
+    let notes = [] // Store notes
 
     // Firebase variables - will be initialized later
     let database = null
@@ -166,6 +167,14 @@
       try {
         const sidebar = document.getElementById("calculatorSidebar")
         const btn = document.getElementById("calculatorBtn")
+        const notesSidebar = document.getElementById("notesSidebar")
+        const notesBtn = document.getElementById("notesBtn")
+
+        // Close notes if open
+        if (notesSidebar.classList.contains("open")) {
+          notesSidebar.classList.remove("open")
+          notesBtn.classList.remove("active")
+        }
 
         if (sidebar.classList.contains("open")) {
           sidebar.classList.remove("open")
@@ -302,6 +311,149 @@
     window.appendToCalculator = appendToCalculator
     window.calculateResult = calculateResult
 
+    // --- Notes Functions ---
+    function toggleNotes() {
+      try {
+        const sidebar = document.getElementById("notesSidebar")
+        const btn = document.getElementById("notesBtn")
+        const calculatorSidebar = document.getElementById("calculatorSidebar")
+        const calculatorBtn = document.getElementById("calculatorBtn")
+
+        // Close calculator if open
+        if (calculatorSidebar.classList.contains("open")) {
+          calculatorSidebar.classList.remove("open")
+          calculatorBtn.classList.remove("active")
+        }
+
+        if (sidebar.classList.contains("open")) {
+          sidebar.classList.remove("open")
+          btn.classList.remove("active")
+        } else {
+          sidebar.classList.add("open")
+          btn.classList.add("active")
+        }
+      } catch (error) {
+        console.error("Error toggling notes:", error)
+      }
+    }
+
+    function closeNotes() {
+      try {
+        const sidebar = document.getElementById("notesSidebar")
+        const btn = document.getElementById("notesBtn")
+        sidebar.classList.remove("open")
+        btn.classList.remove("active")
+      } catch (error) {
+        console.error("Error closing notes:", error)
+      }
+    }
+
+    function addNote() {
+      try {
+        const now = new Date()
+        const timestamp = now.toLocaleString()
+        const newNote = {
+          id: Date.now(),
+          content: "",
+          timestamp: timestamp,
+        }
+
+        notes.unshift(newNote) // Add to beginning
+        saveNotes()
+        renderNotes()
+      } catch (error) {
+        console.error("Error adding note:", error)
+      }
+    }
+
+    function deleteNote(noteId) {
+      try {
+        if (confirm("Are you sure you want to delete this note?")) {
+          notes = notes.filter((note) => note.id !== noteId)
+          saveNotes()
+          renderNotes()
+        }
+      } catch (error) {
+        console.error("Error deleting note:", error)
+      }
+    }
+
+    function clearAllNotes() {
+      try {
+        if (confirm("Are you sure you want to clear all notes? This action cannot be undone.")) {
+          notes = []
+          saveNotes()
+          renderNotes()
+        }
+      } catch (error) {
+        console.error("Error clearing all notes:", error)
+      }
+    }
+
+    function saveNotes() {
+      try {
+        localStorage.setItem("popsey_notes", JSON.stringify(notes))
+      } catch (error) {
+        console.error("Error saving notes:", error)
+      }
+    }
+
+    function loadNotes() {
+      try {
+        const savedNotes = localStorage.getItem("popsey_notes")
+        if (savedNotes) {
+          notes = JSON.parse(savedNotes)
+        }
+      } catch (error) {
+        console.error("Error loading notes:", error)
+        notes = []
+      }
+    }
+
+    function renderNotes() {
+      try {
+        const notesList = document.getElementById("notesList")
+        if (!notesList) return
+
+        notesList.innerHTML = ""
+
+        if (notes.length === 0) {
+          notesList.innerHTML =
+            '<div style="text-align:center; color:#666; padding:20px; font-style:italic;">No notes yet. Click "Add Note" to create your first note.</div>'
+          return
+        }
+
+        notes.forEach((note) => {
+          const noteElement = document.createElement("div")
+          noteElement.className = "note-item"
+          noteElement.innerHTML = `
+            <div class="note-timestamp">${note.timestamp}</div>
+            <textarea class="note-content" placeholder="Enter your note here..." data-note-id="${note.id}">${note.content}</textarea>
+            <div class="note-actions">
+              <button class="note-delete-btn" onclick="deleteNote(${note.id})">×</button>
+            </div>
+          `
+          notesList.appendChild(noteElement)
+
+          // Add event listener for content changes
+          const textarea = noteElement.querySelector(".note-content")
+          textarea.addEventListener("input", (e) => {
+            const noteId = Number.parseInt(e.target.dataset.noteId)
+            const noteIndex = notes.findIndex((n) => n.id === noteId)
+            if (noteIndex !== -1) {
+              notes[noteIndex].content = e.target.value
+              saveNotes()
+            }
+          })
+        })
+      } catch (error) {
+        console.error("Error rendering notes:", error)
+      }
+    }
+
+    // Make notes functions global for onclick handlers
+    window.deleteNote = deleteNote
+
     // --- Shift Management Functions ---
     function handleStartShift() {
       try {
@@ -311,7 +463,17 @@
         }
 
         const now = new Date()
-        shiftStartTime = now.toLocaleString()
+        // Format time in 12-hour format instead of military time
+        const timeOptions = {
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit",
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+          hour12: true
+        }
+        shiftStartTime = now.toLocaleString("en-US", timeOptions)
 
         // Save to localStorage
         localStorage.setItem("popsey_shift_start_time", shiftStartTime)
@@ -351,11 +513,100 @@
       try {
         const savedTime = localStorage.getItem("popsey_shift_start_time")
         if (savedTime) {
-          shiftStartTime = savedTime
+          // Check if the saved time is from today
+          const savedDate = new Date(savedTime)
+          const today = new Date()
+
+          // If saved time is not from today, clear it
+          if (savedDate.toDateString() !== today.toDateString()) {
+            localStorage.removeItem("popsey_shift_start_time")
+            shiftStartTime = null
+          } else {
+            shiftStartTime = savedTime
+          }
           updateShiftStartDisplay()
         }
       } catch (error) {
         console.error("Error loading shift start time:", error)
+      }
+    }
+
+    // --- Billiard Breakdown Functions ---
+    function showBilliardBreakdown() {
+      try {
+        const breakdown = calculateBilliardBreakdown()
+        const modal = document.getElementById("billiardBreakdownModal")
+        const content = document.getElementById("billiardBreakdownContent")
+
+        if (!modal || !content) return
+
+        let html = ""
+
+        // Individual table breakdowns
+        Object.keys(breakdown.tables).forEach((tableType) => {
+          const data = breakdown.tables[tableType]
+          if (data.total > 0) {
+            html += `
+              <div class="breakdown-item">
+                <span class="breakdown-label">${tableType.toUpperCase()} Tables:</span>
+                <span class="breakdown-value">₱${data.total.toFixed(2)}</span>
+              </div>
+            `
+          }
+        })
+
+        // Total
+        html += `
+          <div class="breakdown-item">
+            <span class="breakdown-label">Total Paid:</span>
+            <span class="breakdown-value">₱${breakdown.grandTotal.toFixed(2)}</span>
+          </div>
+        `
+
+        content.innerHTML = html
+        modal.style.display = "block"
+      } catch (error) {
+        console.error("Error showing billiard breakdown:", error)
+      }
+    }
+
+    function calculateBilliardBreakdown() {
+      try {
+        const breakdown = {
+          tables: {
+            m8: { total: 0 },
+            m7: { total: 0 },
+            alpha: { total: 0 },
+            regal: { total: 0 },
+          },
+          grandTotal: 0,
+        }
+
+        document.querySelectorAll("#billiardTbody tr").forEach((tr) => {
+          const tableType = tr.querySelector(".tableType")?.value || "m8"
+          const paid = Number.parseFloat(tr.querySelector(".paid-value")?.textContent) || 0
+
+          if (breakdown.tables[tableType]) {
+            breakdown.tables[tableType].total += paid
+          }
+          breakdown.grandTotal += paid
+        })
+
+        return breakdown
+      } catch (error) {
+        console.error("Error calculating billiard breakdown:", error)
+        return { tables: {}, grandTotal: 0 }
+      }
+    }
+
+    function closeBilliardBreakdown() {
+      try {
+        const modal = document.getElementById("billiardBreakdownModal")
+        if (modal) {
+          modal.style.display = "none"
+        }
+      } catch (error) {
+        console.error("Error closing billiard breakdown:", error)
       }
     }
 
@@ -565,6 +816,9 @@
         const expenseTotal = expenseData.reduce((sum, row) => sum + (row.amount || 0), 0)
         const combinedTotal = billiardPaid + groceryTotal
 
+        // Calculate billiard breakdown
+        const billiardBreakdown = calculateBilliardBreakdown()
+
         return {
           timestamp: currentTime,
           date: new Date().toLocaleDateString() + " " + new Date().toLocaleTimeString(),
@@ -579,6 +833,7 @@
           billiardRowsCount: billiardData.length,
           groceryRowsCount: groceryData.length,
           expenseRowsCount: expenseData.length,
+          billiardBreakdown: billiardBreakdown,
           recallData: {
             tableNames: [...groceryRecallTableNames],
             items: [...groceryRecallItems],
@@ -600,6 +855,7 @@
           billiardRowsCount: 0,
           groceryRowsCount: 0,
           expenseRowsCount: 0,
+          billiardBreakdown: { tables: {}, grandTotal: 0 },
           recallData: { tableNames: [], items: [] },
         }
       }
@@ -641,9 +897,18 @@
             `Loading saved state: ${state.billiardRowsCount || 0} billiard rows, ${state.groceryRowsCount || 0} grocery rows, ${state.expenseRowsCount || 0} expense rows`,
           )
 
-          // Load shift start time
+          // Load shift start time with date check
           if (state.shiftStartTime) {
-            shiftStartTime = state.shiftStartTime
+            const savedDate = new Date(state.shiftStartTime)
+            const today = new Date()
+
+            // Only load shift time if it's from today
+            if (savedDate.toDateString() === today.toDateString()) {
+              shiftStartTime = state.shiftStartTime
+            } else {
+              shiftStartTime = null
+              localStorage.removeItem("popsey_shift_start_time")
+            }
             updateShiftStartDisplay()
           }
 
@@ -810,7 +1075,8 @@
 
         // Restore purchases
         tr._purchases = data.purchases
-        tr._status = data.status || "Unpaid"
+        // Set status based on table name - if no table name, it's a direct purchase
+        tr._status = (!data.tableName || data.tableName.trim() === "") ? "Purchase" : (data.status || "Unpaid")
         attachGroceryRowEvents(tr)
         updateGroceryRow(tr)
         return tr
@@ -1149,8 +1415,12 @@
         // Initialize Firebase after DOM is loaded
         initializeFirebase()
 
-        // Load shift start time
+        // Load shift start time with date check
         loadShiftStartTime()
+
+        // Load notes
+        loadNotes()
+        renderNotes()
 
         // Set up initial tab visibility
         document.querySelectorAll(".tab-content").forEach((tab) => (tab.style.display = "none"))
@@ -1768,10 +2038,11 @@
         // Update status based on table name
         if (!tableName) {
           // No table name = show "Purchase" status (not clickable)
+          row._status = "Purchase"
           statusCellEl.innerHTML = '<span class="grocery-status grocery-purchase">Purchase</span>'
         } else {
           // Has table name = show clickable button
-          const currentStatus = row._status || "Unpaid"
+          const currentStatus = (row._status === "Purchase") ? "Unpaid" : (row._status || "Unpaid")
           const statusClass = currentStatus === "Paid" ? "paid" : "unpaid"
           statusCellEl.innerHTML = `<button class="grocery-status-btn ${statusClass}" data-status="${currentStatus}">${currentStatus}</button>`
 
@@ -1829,6 +2100,14 @@
             if (value && !groceryRecallTableNames.includes(value)) {
               groceryRecallTableNames.push(value)
             }
+            
+            // Update status when table name changes
+            if (!value) {
+              row._status = "Purchase"
+            } else if (row._status === "Purchase") {
+              row._status = "Unpaid"
+            }
+            
             updateGroceryRow(row) // Update status based on table name
             filterGroceryRows() // Filter rows after table name change
             if (!isInitialLoad && !isFirebaseSyncPaused) {
@@ -1943,7 +2222,7 @@
         }
 
         tr._purchases = 0
-        tr._status = "Unpaid"
+        tr._status = "Purchase"  // Default to Purchase for new rows    
         attachGroceryRowEvents(tr)
         updateGroceryRow(tr)
         groceryRows.unshift(tr) // Add to beginning of array
@@ -2010,7 +2289,7 @@
         }
         currentEditingExpenseRow = null
       } catch (error) {
-        console.error("Error hiding edit expense modal:", error)
+        console.error("Error hiding expense modal:", error)
       }
     }
 
@@ -2293,7 +2572,17 @@
     function getTodayDate() {
       try {
         const d = new Date()
-        return d.toLocaleDateString() + " " + d.toLocaleTimeString()
+        // Format date in 12-hour format instead of military time
+        const timeOptions = {
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit",
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+          hour12: true
+        }
+        return d.toLocaleString("en-US", timeOptions)
       } catch (error) {
         console.error("Error getting today's date:", error)
         return "Unknown Date"
@@ -2364,6 +2653,7 @@
           billiardRows: collectBilliardData(),
           groceryRows: collectGroceryData(),
           expenseRows: collectExpenseData(),
+          billiardBreakdown: calculateBilliardBreakdown(),
         }
 
         // Save to history first
@@ -2379,14 +2669,9 @@
         loadShiftHistoryTable()
 
         // Show success message with download option
-        const downloadPDF = window.confirm(
-          "Shift ended successfully! Data has been saved to history and tables have been reset.\n\n" +
-            "Would you like to download the PDF report for this shift?",
-        )
-
-        if (downloadPDF && historyItem) {
+        if (confirm("Shift ended successfully! Data has been saved to history and tables have been reset.\n\nWould you like to download the report for this shift?")) {
           const filename = `shift_end_${currentData.date.replace(/[: ]/g, "_")}.html`
-          exportToPDF(currentData, filename)
+          exportAsHTML(currentData, filename)
         }
       } catch (error) {
         console.error("Error in handleEndShift:", error)
@@ -2407,6 +2692,40 @@
         const closeCalculatorBtn = document.getElementById("closeCalculator")
         if (closeCalculatorBtn) {
           closeCalculatorBtn.addEventListener("click", closeCalculator)
+        }
+
+        // Notes toggle button
+        const notesBtn = document.getElementById("notesBtn")
+        if (notesBtn) {
+          notesBtn.addEventListener("click", toggleNotes)
+        }
+
+        // Notes close button
+        const closeNotesBtn = document.getElementById("closeNotes")
+        if (closeNotesBtn) {
+          closeNotesBtn.addEventListener("click", closeNotes)
+        }
+
+        // Notes controls
+        const addNoteBtn = document.getElementById("addNoteBtn")
+        if (addNoteBtn) {
+          addNoteBtn.addEventListener("click", addNote)
+        }
+
+        const clearNotesBtn = document.getElementById("clearNotesBtn")
+        if (clearNotesBtn) {
+          clearNotesBtn.addEventListener("click", clearAllNotes)
+        }
+
+        // Billiard breakdown modal
+        const billiardTotalCard = document.getElementById("billiardTotalCard")
+        if (billiardTotalCard) {
+          billiardTotalCard.addEventListener("click", showBilliardBreakdown)
+        }
+
+        const closeBilliardBreakdownBtn = document.getElementById("closeBilliardBreakdown")
+        if (closeBilliardBreakdownBtn) {
+          closeBilliardBreakdownBtn.addEventListener("click", closeBilliardBreakdown)
         }
 
         // Start shift button
@@ -2558,11 +2877,16 @@
         document.addEventListener("click", (e) => {
           const expenseModal = document.getElementById("expenseModal")
           const editExpenseModal = document.getElementById("editExpenseModal")
+          const billiardBreakdownModal = document.getElementById("billiardBreakdownModal")
+
           if (e.target === expenseModal) {
             hideExpenseModal()
           }
           if (e.target === editExpenseModal) {
             hideEditExpenseModal()
+          }
+          if (e.target === billiardBreakdownModal) {
+            closeBilliardBreakdown()
           }
         })
 
@@ -2595,7 +2919,7 @@
           })
         }
 
-        // Export current data button
+        // Export current data button - UPDATED to use save dialog
         const exportCurrentBtn = document.getElementById("exportCurrentBtn")
         if (exportCurrentBtn) {
           exportCurrentBtn.addEventListener("click", () => {
@@ -2609,9 +2933,10 @@
               billiardRows: collectBilliardData(),
               groceryRows: collectGroceryData(),
               expenseRows: collectExpenseData(),
+              billiardBreakdown: calculateBilliardBreakdown(),
             }
             const filename = `current_data_${currentData.date.replace(/[: ]/g, "_")}.html`
-            exportToPDF(currentData, filename)
+            exportAsHTML(currentData, filename)
           })
         }
 
@@ -2722,6 +3047,7 @@
           billiardRows: data.billiardRows,
           groceryRows: data.groceryRows,
           expenseRows: data.expenseRows || [],
+          billiardBreakdown: data.billiardBreakdown || { tables: {}, grandTotal: 0 },
         }
 
         history.push(historyItem)
@@ -2740,66 +3066,58 @@
       }
     }
 
-    function exportToPDF(data, filename) {
-  try {
-    console.log("Generating PDF export...")
+    // HTML Export Function - UPDATED to always use save dialog
+    async function exportAsHTML(data, filename) {
+      try {
+        console.log("Generating HTML export...")
 
-    // Generate HTML content
-    const htmlContent = generatePDFHTML(data)
+        const htmlContent = generatePDFHTML(data)
 
-    // Check if the browser supports the File System Access API
-    if ('showSaveFilePicker' in window) {
-      // Modern browsers - show save dialog
-      showSaveDialog(htmlContent, filename.replace(".pdf", ".html"))
-    } else {
-      // Fallback for older browsers - regular download
-      const blob = new Blob([htmlContent], { type: "text/html" })
-      const url = URL.createObjectURL(blob)
+        if ("showSaveFilePicker" in window) {
+          try {
+            const fileHandle = await window.showSaveFilePicker({
+              suggestedName: filename,
+              types: [
+                {
+                  description: "HTML files",
+                  accept: { "text/html": [".html"] },
+                },
+              ],
+            })
 
-      const a = document.createElement("a")
-      a.href = url
-      a.download = filename.replace(".pdf", ".html")
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
-      URL.revokeObjectURL(url)
+            const writable = await fileHandle.createWritable()
+            await writable.write(htmlContent)
+            await writable.close()
+
+            alert(
+              "✅ HTML file saved successfully!\n\n💡 Tip: Open this file in any browser and use Ctrl+P to print as PDF.",
+            )
+          } catch (error) {
+            if (error.name === "AbortError") {
+              return // User cancelled
+            }
+            throw error
+          }
+        } else {
+          // Fallback for older browsers
+          const blob = new Blob([htmlContent], { type: "text/html" })
+          const url = URL.createObjectURL(blob)
+
+          const a = document.createElement("a")
+          a.href = url
+          a.download = filename
+          document.body.appendChild(a)
+          a.click()
+          document.body.removeChild(a)
+          URL.revokeObjectURL(url)
+
+          alert("✅ HTML file downloaded!\n\n💡 Tip: Open this file in any browser and use Ctrl+P to print as PDF.")
+        }
+      } catch (error) {
+        console.error("Error exporting HTML:", error)
+        alert("❌ Error generating HTML export. Please try again.")
+      }
     }
-
-    console.log("PDF export completed")
-  } catch (error) {
-    console.error("Error exporting to PDF:", error)
-    alert("Error generating PDF export. Please try again.")
-  }
-}
-
-// New function to handle the save dialog
-async function showSaveDialog(content, suggestedName) {
-  try {
-    const fileHandle = await window.showSaveFilePicker({
-      suggestedName: suggestedName,
-      types: [
-        {
-          description: 'HTML files',
-          accept: {
-            'text/html': ['.html'],
-          },
-        },
-      ],
-    })
-
-    const writable = await fileHandle.createWritable()
-    await writable.write(content)
-    await writable.close()
-
-    alert('File saved successfully!')
-  } catch (error) {
-    if (error.name !== 'AbortError') {
-      console.error('Error saving file:', error)
-      alert('Error saving file. Please try again.')
-    }
-    // If user cancels, do nothing (AbortError)
-  }
-}
 
     // --- Enhanced PDF Generation with Better Styling ---
     function generatePDFHTML(data) {
@@ -2949,6 +3267,16 @@ async function showSaveDialog(content, suggestedName) {
               font-size: 12px;
               text-transform: uppercase;
             }
+
+            .status-purchase {
+              color: #007bff;
+              font-weight: bold;
+              background: #e3f2fd;
+              border-radius: 6px;
+              padding: 4px 8px;
+              font-size: 12px;
+              text-transform: uppercase;
+            }
             
             .no-data {
               text-align: center;
@@ -2966,6 +3294,27 @@ async function showSaveDialog(content, suggestedName) {
               margin-bottom: 20px;
               color: #1976d2;
               text-align: center;
+            }
+
+            .breakdown-section {
+              background: #f8f9fa;
+              border-radius: 8px;
+              padding: 20px;
+              margin-bottom: 20px;
+            }
+
+            .breakdown-item {
+              display: flex;
+              justify-content: space-between;
+              align-items: center;
+              padding: 8px 0;
+              border-bottom: 1px solid #dee2e6;
+            }
+
+            .breakdown-item:last-child {
+              border-bottom: none;
+              font-weight: 700;
+              color: #43cea2;
             }
             
             @media print {
@@ -3039,6 +3388,37 @@ async function showSaveDialog(content, suggestedName) {
               <div class="value">₱${data.combinedTotal.toFixed(2)}</div>
             </div>
           </div>
+
+          ${
+            data.billiardBreakdown && data.billiardBreakdown.grandTotal > 0
+              ? `
+          <div class="section">
+            <div class="section-header">🎱 Billiard Tables Breakdown</div>
+            <div class="section-content">
+              <div class="breakdown-section">
+                ${Object.keys(data.billiardBreakdown.tables)
+                  .map((tableType) => {
+                    const tableData = data.billiardBreakdown.tables[tableType]
+                    return tableData.total > 0
+                      ? `
+                    <div class="breakdown-item">
+                      <span>${tableType.toUpperCase()} Tables:</span>
+                      <span>₱${tableData.total.toFixed(2)}</span>
+                    </div>
+                  `
+                      : ""
+                  })
+                  .join("")}
+                <div class="breakdown-item">
+                  <span><strong>Total Billiard Revenue:</strong></span>
+                  <span><strong>₱${data.billiardBreakdown.grandTotal.toFixed(2)}</strong></span>
+                </div>
+              </div>
+            </div>
+          </div>
+          `
+              : ""
+          }
           
           <div class="section">
             <div class="section-header">🎱 Billiard Transactions</div>
@@ -3308,9 +3688,17 @@ async function showSaveDialog(content, suggestedName) {
           `Remote state: ${state.billiardRowsCount || 0} billiard, ${state.groceryRowsCount || 0} grocery, ${state.expenseRowsCount || 0} expense rows`,
         )
 
-        // Load shift start time
+        // Load shift start time with date check
         if (state.shiftStartTime) {
-          shiftStartTime = state.shiftStartTime
+          const savedDate = new Date(state.shiftStartTime)
+          const today = new Date()
+
+          // Only load shift time if it's from today
+          if (savedDate.toDateString() === today.toDateString()) {
+            shiftStartTime = state.shiftStartTime
+          } else {
+            shiftStartTime = null
+          }
           updateShiftStartDisplay()
         }
 
@@ -3437,6 +3825,7 @@ async function showSaveDialog(content, suggestedName) {
             billiardRows: historyItem.billiardRows || [],
             groceryRows: historyItem.groceryRows || [],
             expenseRows: historyItem.expenseRows || [],
+            billiardBreakdown: historyItem.billiardBreakdown || { tables: {}, grandTotal: 0 },
           }
           exportToPDF(exportData, historyItem.filename)
         }

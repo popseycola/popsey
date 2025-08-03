@@ -69,6 +69,7 @@ body {
   font-size: 16px;
   transition: border-color 0.3s ease;
   box-sizing: border-box;
+  min-width: 300px;
 }
 
 .form-group input:focus {
@@ -198,12 +199,35 @@ h2 {
   box-shadow: 0 0 10px rgba(0, 123, 255, 0.5);
 }
 
+/* Notes Button Styles */
+.notes-btn {
+  padding: 10px 24px;
+  border: none;
+  background: #28a745;
+  color: #fff;
+  font-weight: 600;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 16px;
+  transition: background 0.2s, color 0.2s;
+  margin-left: 8px;
+}
+
+.notes-btn:hover {
+  background: #1e7e34;
+}
+
+.notes-btn.active {
+  background: #1e7e34;
+  box-shadow: 0 0 10px rgba(40, 167, 69, 0.5);
+}
+
 /* Calculator Sidebar Styles */
 .calculator-sidebar {
   position: fixed;
   top: 0;
-  right: -350px;
-  width: 350px;
+  right: -450px;
+  width: 450px;
   height: 100vh;
   background: #fff;
   box-shadow: -2px 0 10px rgba(0, 0, 0, 0.1);
@@ -254,7 +278,7 @@ h2 {
 
 .calculator-body {
   flex: 1;
-  padding: 20px;
+  padding: 15px;
   display: flex;
   flex-direction: column;
 }
@@ -275,8 +299,8 @@ h2 {
   margin-bottom: 10px;
   text-align: right;
   box-sizing: border-box;
-  min-width: 200px;  /* Add this to make it taller */
-  resize: horizontal;   /* Add this to allow manual resizing */
+  min-width: 250px;
+  resize: horizontal;
 }
 
 .calculator-result {
@@ -361,6 +385,169 @@ h2 {
 
 .calc-btn-zero {
   grid-column: span 2;
+}
+
+/* Notes Sidebar Styles */
+.notes-sidebar {
+  position: fixed;
+  top: 0;
+  right: -400px;
+  width: 400px;
+  height: 100vh;
+  background: #fff;
+  box-shadow: -2px 0 10px rgba(0, 0, 0, 0.1);
+  z-index: 1002;
+  transition: right 0.3s ease;
+  display: flex;
+  flex-direction: column;
+}
+
+.notes-sidebar.open {
+  right: 0;
+}
+
+.notes-header {
+  background: linear-gradient(135deg, #28a745 0%, #1e7e34 100%);
+  color: #fff;
+  padding: 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.notes-header h3 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.close-notes {
+  background: none;
+  border: none;
+  color: #fff;
+  font-size: 24px;
+  cursor: pointer;
+  padding: 0;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: background 0.2s;
+}
+
+.close-notes:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.notes-body {
+  flex: 1;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+}
+
+.notes-controls {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.add-note-btn {
+  flex: 1;
+  padding: 10px 15px;
+  background: #28a745;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.add-note-btn:hover {
+  background: #1e7e34;
+}
+
+.clear-notes-btn {
+  padding: 10px 15px;
+  background: #dc3545;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.clear-notes-btn:hover {
+  background: #c82333;
+}
+
+.notes-list {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.note-item {
+  background: #f8f9fa;
+  border: 1px solid #dee2e6;
+  border-radius: 8px;
+  padding: 15px;
+  margin-bottom: 10px;
+  position: relative;
+}
+
+.note-timestamp {
+  font-size: 12px;
+  color: #6c757d;
+  margin-bottom: 8px;
+}
+
+.note-content {
+  width: 100%;
+  border: none;
+  background: transparent;
+  resize: vertical;
+  min-height: 60px;
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 1.4;
+  color: #495057;
+}
+
+.note-content:focus {
+  outline: none;
+}
+
+.note-actions {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  display: flex;
+  gap: 5px;
+}
+
+.note-delete-btn {
+  background: #dc3545;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  width: 24px;
+  height: 24px;
+  font-size: 12px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s;
+}
+
+.note-delete-btn:hover {
+  background: #c82333;
 }
 
 .tab-content {
@@ -896,7 +1083,18 @@ button.mode-btn[data-mode="hour"] {
   min-width: 180px;
   box-shadow: 0 2px 8px rgba(67, 206, 162, 0.08);
   text-align: center;
+  transition: transform 0.2s, box-shadow 0.2s;
 }
+
+.dashboard-card.clickable-card {
+  cursor: pointer;
+}
+
+.dashboard-card.clickable-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgba(67, 206, 162, 0.15);
+}
+
 .dashboard-label {
   font-size: 15px;
   color: #888;
@@ -906,6 +1104,13 @@ button.mode-btn[data-mode="hour"] {
   font-size: 28px;
   font-weight: 700;
   color: #43cea2;
+}
+
+.dashboard-hint {
+  font-size: 12px;
+  color: #666;
+  margin-top: 4px;
+  font-style: italic;
 }
 
 /* Live clock and date styles */
@@ -1005,9 +1210,36 @@ button.mode-btn[data-mode="hour"] {
   box-shadow: 0 2px 8px rgba(67, 206, 162, 0.3);
 }
 
+/* Billiard Breakdown Styles */
+.breakdown-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 0;
+  border-bottom: 1px solid #e3e7ed;
+}
+
+.breakdown-item:last-child {
+  border-bottom: none;
+  font-weight: 700;
+  font-size: 16px;
+  color: #43cea2;
+}
+
+.breakdown-label {
+  font-weight: 600;
+  color: #222b3a;
+}
+
+.breakdown-value {
+  font-weight: 700;
+  color: #43cea2;
+}
+
 /* Responsive adjustments */
 @media (max-width: 900px) {
-  .calculator-sidebar {
+  .calculator-sidebar,
+  .notes-sidebar {
     width: 100%;
     right: -100%;
   }
@@ -1052,7 +1284,8 @@ button.mode-btn[data-mode="hour"] {
     margin-top: 20px;
   }
 
-  .calculator-btn {
+  .calculator-btn,
+  .notes-btn {
     margin-left: 0;
     margin-top: 8px;
   }

@@ -45,6 +45,7 @@
       <button class="tab-btn" data-tab="grocery">Grocery</button>
       <button class="tab-btn" data-tab="expense">Expense</button>
       <button id="calculatorBtn" class="calculator-btn">Calculator</button>
+      <button id="notesBtn" class="notes-btn">Notes</button>
     </div>
 
     <!-- Calculator Sidebar -->
@@ -85,6 +86,23 @@
       </div>
     </div>
 
+    <!-- Notes Sidebar -->
+    <div id="notesSidebar" class="notes-sidebar">
+      <div class="notes-header">
+        <h3>Notes</h3>
+        <button id="closeNotes" class="close-notes">×</button>
+      </div>
+      <div class="notes-body">
+        <div class="notes-controls">
+          <button id="addNoteBtn" class="add-note-btn">+ Add Note</button>
+          <button id="clearNotesBtn" class="clear-notes-btn">Clear All</button>
+        </div>
+        <div class="notes-list" id="notesList">
+          <!-- Notes will be added dynamically -->
+        </div>
+      </div>
+    </div>
+
     <div class="tab-content" id="dashboard">
       <h2>Main Dashboard</h2>
       <div class="dashboard-datetime">
@@ -99,9 +117,10 @@
         <div id="shiftStartDisplay" style="font-size:16px; margin-top:8px; font-weight:600;">Shift Status: Not Started</div>
       </div>
       <div style="display:flex; gap:24px; justify-content:center; margin-bottom:24px; flex-wrap: wrap;">
-        <div class="dashboard-card">
+        <div class="dashboard-card clickable-card" id="billiardTotalCard">
           <div class="dashboard-label">Billiard Total Paid</div>
           <div class="dashboard-value" id="dashboard-billiard-paid">0.00</div>
+          <div class="dashboard-hint">Click for breakdown</div>
         </div>
         <div class="dashboard-card">
           <div class="dashboard-label">Grocery Total</div>
@@ -235,6 +254,19 @@
           <!-- Expense rows will be added dynamically -->
         </tbody>
       </table>
+    </div>
+
+    <!-- Billiard Breakdown Modal -->
+    <div id="billiardBreakdownModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:1000;">
+      <div style="position:absolute; top:50%; left:50%; transform:translate(-50%, -50%); background:#fff; padding:30px; border-radius:10px; box-shadow:0 4px 16px rgba(0,0,0,0.2); width:500px; max-width:90%;">
+        <h3 style="margin-top:0; color:#43cea2; text-align:center;">🎱 Billiard Tables Breakdown</h3>
+        <div id="billiardBreakdownContent">
+          <!-- Breakdown content will be filled by JS -->
+        </div>
+        <div style="text-align:center; margin-top:20px;">
+          <button id="closeBilliardBreakdown" style="padding:10px 20px; background:#43cea2; color:#fff; border:none; border-radius:5px; font-weight:600; cursor:pointer;">Close</button>
+        </div>
+      </div>
     </div>
 
     <!-- Expense Modal -->
