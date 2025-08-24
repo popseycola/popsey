@@ -7,6 +7,7 @@
   <!-- Firebase SDK -->
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-storage-compat.js"></script>
 </head>
 <body>
@@ -145,6 +146,48 @@
       <!-- Shift History Section -->
       <div style="text-align:center; margin-bottom:16px;">
         <h3 style="color:#43cea2; font-weight:600;">Shift History</h3>
+        
+        <!-- Added history filters -->
+        <div class="history-filters" style="margin-bottom:16px; display:flex; gap:12px; justify-content:center; align-items:center; flex-wrap:wrap;">
+          <div class="filter-group">
+            <label for="monthFilter" style="margin-right:8px; font-weight:600;">Month:</label>
+            <select id="monthFilter" style="padding:6px 10px; border:1px solid #b0b8c1; border-radius:4px; font-size:14px;">
+              <option value="">All Months</option>
+              <option value="0">January</option>
+              <option value="1">February</option>
+              <option value="2">March</option>
+              <option value="3">April</option>
+              <option value="4">May</option>
+              <option value="5">June</option>
+              <option value="6">July</option>
+              <option value="7">August</option>
+              <option value="8">September</option>
+              <option value="9">October</option>
+              <option value="10">November</option>
+              <option value="11">December</option>
+            </select>
+          </div>
+          
+          <div class="filter-group">
+            <label for="yearFilter" style="margin-right:8px; font-weight:600;">Year:</label>
+            <select id="yearFilter" style="padding:6px 10px; border:1px solid #b0b8c1; border-radius:4px; font-size:14px;">
+              <option value="">All Years</option>
+            </select>
+          </div>
+          
+          <div class="filter-group">
+            <label for="dateRangeStart" style="margin-right:8px; font-weight:600;">From:</label>
+            <input type="date" id="dateRangeStart" style="padding:6px 10px; border:1px solid #b0b8c1; border-radius:4px; font-size:14px;">
+          </div>
+          
+          <div class="filter-group">
+            <label for="dateRangeEnd" style="margin-right:8px; font-weight:600;">To:</label>
+            <input type="date" id="dateRangeEnd" style="padding:6px 10px; border:1px solid #b0b8c1; border-radius:4px; font-size:14px;">
+          </div>
+          
+          <button id="clearFiltersBtn" style="padding:6px 12px; background:#6c757d; color:#fff; border:none; border-radius:4px; cursor:pointer; font-size:14px;">Clear Filters</button>
+        </div>
+        
         <button id="clearHistoryBtn" style="padding:8px 16px; font-size:14px; font-weight:600; border-radius:5px; background:#dc3545; color:#fff; border:none; cursor:pointer; margin-bottom:10px;">Clear All History</button>
       </div>
       
@@ -324,6 +367,7 @@
     // Initialize Firebase
     firebase.initializeApp(firebaseConfig);
     const database = firebase.database();
+    const firestore = firebase.firestore();
     const storage = firebase.storage();
   </script>
   <script src="script.js"></script>

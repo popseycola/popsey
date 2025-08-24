@@ -18,8 +18,22 @@
 
     // Firebase variables - will be initialized later
     let database = null
+    let firestore = null
     let storage = null
     let firebaseInitialized = false
+    isOnline = navigator.onLine
+    syncQueue = []
+    isFirebaseSyncPaused = false
+    lastSaveTimestamp = 0
+    isInitialLoad = true
+    shiftStartTime = null
+
+    let currentHistoryFilters = {
+      month: "",
+      year: "",
+      dateStart: "",
+      dateEnd: "",
+    }
 
     // Enhanced Calculator variables
     let calculatorExpression = ""
@@ -677,9 +691,10 @@
           window.firebase.apps.length > 0
         ) {
           database = window.firebase.database()
+          firestore = window.firebase.firestore()
           storage = window.firebase.storage()
           firebaseInitialized = true
-          console.log("Firebase initialized successfully")
+          console.log("Firebase (Realtime Database + Firestore) initialized successfully")
         } else {
           console.log("Firebase not available - running in offline mode")
         }
@@ -1199,12 +1214,24 @@
 
     function saveToFirebase(path, data) {
       try {
-        if (isOnline && firebaseInitialized && database) {
-          database
-            .ref(`popsey/${path}`)
-            .set(data)
-            .then(() => console.log(`Data saved to Firebase: ${path}`))
-            .catch((error) => console.error("Firebase save error:", error))
+        if (isOnline && firebaseInitialized) {
+          // Save to Realtime Database (existing functionality)
+          if (database) {
+            database
+              .ref(`popsey/${path}`)
+              .set(data)
+              .then(() => console.log(`Data saved to Realtime Database: ${path}`))
+              .catch((error) => console.error("Realtime Database save error:", error))
+          }
+
+          if (firestore) {
+            firestore
+              .collection("popsey")
+              .doc(path)
+              .set(data)
+              .then(() => console.log(`Data saved to Firestore: ${path}`))
+              .catch((error) => console.error("Firestore save error:", error))
+          }
         } else if (!firebaseInitialized) {
           console.log("Firebase not available - data saved locally only")
         } else {
@@ -1247,48 +1274,135 @@
     // --- NEW: Load Shift History from Firebase ---
     function loadShiftHistoryFromFirebase() {
       try {
-        if (!firebaseInitialized || !database) return
+        if (!firebaseInitialized) return
 
         console.log("Loading shift history from Firebase...")
-        database.ref("popsey/shift_history").once("value", (snapshot) => {
-          try {
-            const firebaseHistory = snapshot.val()
-            if (firebaseHistory) {
-              // Convert Firebase object to array
-              const historyArray = Object.values(firebaseHistory)
 
-              // Get local history
-              let localHistory = []
+        // Try Firestore first
+        if (firestore) {
+          firestore
+            .collection("popsey")
+            .doc("shift_history")
+            .collection("entries")
+            .get()
+            .then((querySnapshot) => {
               try {
-                localHistory = JSON.parse(localStorage.getItem("popsey_shift_history")) || []
-              } catch {}
+                const firestoreHistory = []
+                querySnapshot.forEach((doc) => {
+                  firestoreHistory.push(doc.data())
+                })
 
-              // Merge histories (Firebase takes precedence)
-              const mergedHistory = [...historyArray]
-
-              // Add any local items that aren't in Firebase
-              localHistory.forEach((localItem) => {
-                if (!historyArray.find((fbItem) => fbItem.id === localItem.id)) {
-                  mergedHistory.push(localItem)
-                  // Also save this local item to Firebase
-                  saveHistoryToFirebase(localItem)
+                if (firestoreHistory.length > 0) {
+                  console.log(`Loaded ${firestoreHistory.length} history items from Firestore`)
+                  mergeAndSaveHistory(firestoreHistory)
+                  return
                 }
-              })
+              } catch (error) {
+                console.error("Error processing Firestore history:", error)
+              }
 
-              // Save merged history locally
-              localStorage.setItem("popsey_shift_history", JSON.stringify(mergedHistory))
+              // Fallback to Realtime Database if Firestore is empty
+              loadFromRealtimeDatabase()
+            })
+            .catch((error) => {
+              console.error("Firestore load error, falling back to Realtime Database:", error)
+              loadFromRealtimeDatabase()
+            })
+        } else {
+          loadFromRealtimeDatabase()
+        }
 
-              // Reload the history table
-              loadShiftHistoryTable()
+        function loadFromRealtimeDatabase() {
+          if (!database) return
 
-              console.log(`Loaded ${historyArray.length} history items from Firebase`)
+          database.ref("popsey/shift_history").once("value", (snapshot) => {
+            try {
+              const firebaseHistory = snapshot.val()
+              if (firebaseHistory) {
+                const historyArray = Object.values(firebaseHistory)
+                console.log(`Loaded ${historyArray.length} history items from Realtime Database`)
+                mergeAndSaveHistory(historyArray)
+              }
+            } catch (error) {
+              console.error("Error processing Realtime Database history:", error)
             }
-          } catch (error) {
-            console.error("Error processing Firebase history:", error)
-          }
-        })
+          })
+        }
+
+        function mergeAndSaveHistory(historyArray) {
+          // Get local history
+          let localHistory = []
+          try {
+            localHistory = JSON.parse(localStorage.getItem("popsey_shift_history")) || []
+          } catch {}
+
+          // Merge histories (Firebase takes precedence)
+          const mergedHistory = [...historyArray]
+
+          // Add any local items that aren't in Firebase
+          localHistory.forEach((localItem) => {
+            if (!historyArray.find((fbItem) => fbItem.id === localItem.id)) {
+              mergedHistory.push(localItem)
+              // Also save this local item to Firebase
+              saveHistoryToFirebase(localItem)
+            }
+          })
+
+          // Save merged history locally
+          localStorage.setItem("popsey_shift_history", JSON.stringify(mergedHistory))
+
+          // Reload the history table with filters
+          loadShiftHistoryTable()
+        }
       } catch (error) {
         console.error("Error loading shift history from Firebase:", error)
+      }
+    }
+
+    function saveShiftHistory(data) {
+      try {
+        // Create history item with unique ID
+        const historyItem = {
+          id: Date.now().toString(),
+          timestamp: Date.now(),
+          date: data.date,
+          shiftStartTime: data.shiftStartTime,
+          billiardPaid: data.billiardPaid,
+          groceryTotal: data.groceryTotal,
+          expenseTotal: data.expenseTotal || 0,
+          combinedTotal: data.combinedTotal,
+          billiardRows: data.billiardRows || [],
+          groceryRows: data.groceryRows || [],
+          expenseRows: data.expenseRows || [],
+          billiardBreakdown: data.billiardBreakdown || { tables: {}, grandTotal: 0 },
+        }
+
+        // Get existing history
+        let history = []
+        try {
+          history = JSON.parse(localStorage.getItem("popsey_shift_history")) || []
+        } catch (error) {
+          console.error("Error loading existing history:", error)
+        }
+
+        // Add new item to beginning of array
+        history.unshift(historyItem)
+
+        // Save to localStorage
+        try {
+          localStorage.setItem("popsey_shift_history", JSON.stringify(history))
+          console.log("History item saved locally:", historyItem.id)
+        } catch (error) {
+          console.error("Error saving history to localStorage:", error)
+        }
+
+        // Save to Firebase
+        saveHistoryToFirebase(historyItem)
+
+        return historyItem
+      } catch (error) {
+        console.error("Error in saveShiftHistory:", error)
+        return null
       }
     }
 
@@ -1462,6 +1576,8 @@
         // Set up all event listeners
         setupEventListeners()
 
+        setupHistoryFilters()
+
         // Start live clock
         startLiveClock()
 
@@ -1469,6 +1585,8 @@
         updateDashboardValues()
         updateBilliardTotal()
         updateGroceryTotal()
+
+        populateYearFilter()
         loadShiftHistoryTable()
 
         // Initialize calculator displays
@@ -2950,35 +3068,182 @@
           endShiftBtn.addEventListener("click", handleEndShift)
         }
 
-        // Clear history button
         const clearHistoryBtn = document.getElementById("clearHistoryBtn")
         if (clearHistoryBtn) {
           clearHistoryBtn.addEventListener("click", () => {
+            // First confirmation
             if (!window.confirm("Are you sure you want to clear ALL shift history? This action cannot be undone."))
               return
 
-            try {
-              localStorage.removeItem("popsey_shift_history")
-            } catch (error) {
-              console.error("Error clearing history:", error)
-            }
+            // Create authentication modal
+            const authModal = document.createElement("div")
+            authModal.style.cssText = `
+              position: fixed;
+              top: 0;
+              left: 0;
+              width: 100%;
+              height: 100%;
+              background: rgba(0,0,0,0.7);
+              z-index: 2000;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+            `
 
-            // Clear Firebase history if available
-            if (isOnline && firebaseInitialized && database) {
-              try {
-                database
-                  .ref("popsey/shift_history")
-                  .remove()
-                  .then(() => console.log("Firebase history cleared"))
-                  .catch((error) => console.error("Error clearing Firebase history:", error))
-              } catch (error) {
-                console.error("Error clearing Firebase history:", error)
+            const authContent = document.createElement("div")
+            authContent.style.cssText = `
+              background: #fff;
+              padding: 30px;
+              border-radius: 10px;
+              box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+              width: 400px;
+              max-width: 90%;
+              text-align: center;
+            `
+
+            authContent.innerHTML = `
+              <h3 style="margin-top: 0; color: #dc3545; font-weight: 700;">⚠️ SECURITY VERIFICATION</h3>
+              <p style="margin-bottom: 20px; color: #666;">Please enter your credentials twice to confirm this action:</p>
+              
+              <div style="margin-bottom: 15px; text-align: left;">
+                <label style="display: block; margin-bottom: 5px; font-weight: 600;">Username (1st time):</label>
+                <input type="text" id="authUsername1" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 5px;">
+              </div>
+              
+              <div style="margin-bottom: 15px; text-align: left;">
+                <label style="display: block; margin-bottom: 5px; font-weight: 600;">Password (1st time):</label>
+                <input type="password" id="authPassword1" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 5px;">
+              </div>
+              
+              <div style="margin-bottom: 15px; text-align: left;">
+                <label style="display: block; margin-bottom: 5px; font-weight: 600;">Username (2nd time):</label>
+                <input type="text" id="authUsername2" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 5px;">
+              </div>
+              
+              <div style="margin-bottom: 20px; text-align: left;">
+                <label style="display: block; margin-bottom: 5px; font-weight: 600;">Password (2nd time):</label>
+                <input type="password" id="authPassword2" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 5px;">
+              </div>
+              
+              <div id="authError" style="color: #dc3545; margin-bottom: 15px; font-weight: 600; display: none;"></div>
+              
+              <div style="display: flex; gap: 10px; justify-content: center;">
+                <button id="confirmClearBtn" style="padding: 10px 20px; background: #dc3545; color: #fff; border: none; border-radius: 5px; font-weight: 600; cursor: pointer;">Clear History</button>
+                <button id="cancelClearBtn" style="padding: 10px 20px; background: #6c757d; color: #fff; border: none; border-radius: 5px; font-weight: 600; cursor: pointer;">Cancel</button>
+              </div>
+            `
+
+            authModal.appendChild(authContent)
+            document.body.appendChild(authModal)
+
+            // Get current logged-in user credentials
+            const currentUsername = localStorage.getItem("popsey_current_user") || "admin"
+            const currentPassword = localStorage.getItem("popsey_current_password") || "admin123"
+
+            // Handle confirm button
+            document.getElementById("confirmClearBtn").addEventListener("click", () => {
+              const username1 = document.getElementById("authUsername1").value.trim()
+              const password1 = document.getElementById("authPassword1").value
+              const username2 = document.getElementById("authUsername2").value.trim()
+              const password2 = document.getElementById("authPassword2").value
+              const errorDiv = document.getElementById("authError")
+
+              // Validate all fields are filled
+              if (!username1 || !password1 || !username2 || !password2) {
+                errorDiv.textContent = "All fields are required!"
+                errorDiv.style.display = "block"
+                return
               }
-            }
 
-            loadShiftHistoryTable()
-            alert("All shift history has been cleared.")
+              // Validate both entries match each other
+              if (username1 !== username2 || password1 !== password2) {
+                errorDiv.textContent = "Username and password entries must match!"
+                errorDiv.style.display = "block"
+                return
+              }
+
+              // Validate credentials match current user
+              if (username1 !== currentUsername || password1 !== currentPassword) {
+                errorDiv.textContent = "Invalid credentials! Please enter your current login details."
+                errorDiv.style.display = "block"
+                return
+              }
+
+              // All validations passed - proceed with clearing history
+              document.body.removeChild(authModal)
+
+              try {
+                localStorage.removeItem("popsey_shift_history")
+              } catch (error) {
+                console.error("Error clearing history:", error)
+              }
+
+              // Clear Firebase history if available
+              if (isOnline && firebaseInitialized && database) {
+                try {
+                  database
+                    .ref("popsey/shift_history")
+                    .remove()
+                    .then(() => console.log("Firebase history cleared"))
+                    .catch((error) => console.error("Error clearing Firebase history:", error))
+                } catch (error) {
+                  console.error("Error clearing Firebase history:", error)
+                }
+              }
+
+              // Clear Firestore history if available
+              if (isOnline && firebaseInitialized && firestore) {
+                try {
+                  firestore
+                    .collection("popsey")
+                    .doc("shift_history")
+                    .delete()
+                    .then(() => console.log("Firestore history cleared"))
+                    .catch((error) => console.error("Error clearing Firestore history:", error))
+                } catch (error) {
+                  console.error("Error clearing Firestore history:", error)
+                }
+              }
+
+              loadShiftHistoryTable()
+              alert("All shift history has been cleared successfully!")
+            })
+
+            // Handle cancel button
+            document.getElementById("cancelClearBtn").addEventListener("click", () => {
+              document.body.removeChild(authModal)
+            })
+
+            // Focus first input
+            setTimeout(() => {
+              document.getElementById("authUsername1").focus()
+            }, 100)
           })
+        }
+
+        // Export current data button - UPDATED to use save dialog
+        if (exportCurrentBtn) {
+          exportCurrentBtn.addEventListener("click", () => {
+            const currentData = {
+              date: getTodayDate(),
+              shiftStartTime: shiftStartTime || "Start shift not reported",
+              billiardPaid: Number.parseFloat(document.getElementById("dashboard-billiard-paid")?.textContent) || 0,
+              groceryTotal: Number.parseFloat(document.getElementById("dashboard-grocery-total")?.textContent) || 0,
+              expenseTotal: Number.parseFloat(document.getElementById("dashboard-expense-total")?.textContent) || 0,
+              combinedTotal: Number.parseFloat(document.getElementById("dashboard-combined-total")?.textContent) || 0,
+              billiardRows: collectBilliardData(),
+              groceryRows: collectGroceryData(),
+              expenseRows: collectExpenseData(),
+              billiardBreakdown: calculateBilliardBreakdown(),
+            }
+            const filename = `current_data_${currentData.date.replace(/[: ]/g, "_")}.html`
+            exportAsHTML(currentData, filename)
+          })
+        }
+
+        // End shift button - UPDATED
+        if (endShiftBtn) {
+          endShiftBtn.addEventListener("click", handleEndShift)
         }
       } catch (error) {
         console.error("Error setting up event listeners:", error)
@@ -2998,10 +3263,12 @@
 
         tbody.innerHTML = ""
 
-        // Sort by timestamp (newest first)
-        history.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0))
+        const filteredHistory = applyHistoryFilters(history)
 
-        history.forEach((row) => {
+        // Sort by timestamp (newest first)
+        filteredHistory.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0))
+
+        filteredHistory.forEach((row) => {
           const tr = document.createElement("tr")
           tr.style.borderBottom = "1px solid #e3e7ed"
           tr.innerHTML = `
@@ -3020,53 +3287,168 @@
           tbody.appendChild(tr)
         })
 
-        if (history.length === 0) {
+        if (filteredHistory.length === 0) {
           const tr = document.createElement("tr")
-          tr.innerHTML = `<td colspan="7" style="padding:20px; text-align:center; color:#888; font-style:italic;">No shift history available</td>`
+          const message = history.length === 0 ? "No shift history available" : "No records match the selected filters"
+          tr.innerHTML = `<td colspan="7" style="padding:20px; text-align:center; color:#888; font-style:italic;">${message}</td>`
           tbody.appendChild(tr)
         }
+
+        updateFilterSummary(history.length, filteredHistory.length)
       } catch (error) {
         console.error("Error loading shift history table:", error)
       }
     }
 
-    function saveShiftHistory(data) {
+    function applyHistoryFilters(history) {
+      return history.filter((item) => {
+        try {
+          const itemDate = new Date(item.timestamp)
+
+          // Month filter
+          if (
+            currentHistoryFilters.month !== "" &&
+            itemDate.getMonth() !== Number.parseInt(currentHistoryFilters.month)
+          ) {
+            return false
+          }
+
+          // Year filter
+          if (
+            currentHistoryFilters.year !== "" &&
+            itemDate.getFullYear() !== Number.parseInt(currentHistoryFilters.year)
+          ) {
+            return false
+          }
+
+          // Date range filter
+          if (currentHistoryFilters.dateStart) {
+            const startDate = new Date(currentHistoryFilters.dateStart)
+            startDate.setHours(0, 0, 0, 0)
+            if (itemDate < startDate) {
+              return false
+            }
+          }
+
+          if (currentHistoryFilters.dateEnd) {
+            const endDate = new Date(currentHistoryFilters.dateEnd)
+            endDate.setHours(23, 59, 59, 999)
+            if (itemDate > endDate) {
+              return false
+            }
+          }
+
+          return true
+        } catch (error) {
+          console.error("Error filtering history item:", error)
+          return true // Include item if there's an error
+        }
+      })
+    }
+
+    function updateFilterSummary(totalCount, filteredCount) {
+      // You can add a summary display here if needed
+      console.log(`Showing ${filteredCount} of ${totalCount} history records`)
+    }
+
+    function populateYearFilter() {
       try {
-        // Save locally
         let history = []
         try {
           history = JSON.parse(localStorage.getItem("popsey_shift_history")) || []
         } catch {}
 
-        const historyItem = {
-          id: Date.now(),
-          date: data.date,
-          shiftStartTime: data.shiftStartTime,
-          billiardPaid: data.billiardPaid,
-          groceryTotal: data.groceryTotal,
-          expenseTotal: data.expenseTotal || 0,
-          combinedTotal: data.combinedTotal,
-          filename: `shift_${data.date.replace(/[: ]/g, "_")}.html`,
-          timestamp: Date.now(),
-          billiardRows: data.billiardRows,
-          groceryRows: data.groceryRows,
-          expenseRows: data.expenseRows || [],
-          billiardBreakdown: data.billiardBreakdown || { tables: {}, grandTotal: 0 },
-        }
+        const yearFilter = document.getElementById("yearFilter")
+        if (!yearFilter) return
 
-        history.push(historyItem)
-        try {
-          localStorage.setItem("popsey_shift_history", JSON.stringify(history))
-        } catch (error) {
-          console.error("Error saving shift history:", error)
-        }
+        // Get unique years from history
+        const years = new Set()
+        history.forEach((item) => {
+          try {
+            const year = new Date(item.timestamp).getFullYear()
+            years.add(year)
+          } catch (error) {
+            console.error("Error extracting year from history item:", error)
+          }
+        })
 
-        // Save to Firebase immediately
-        saveHistoryToFirebase(historyItem)
-        return historyItem
+        // Clear existing options except "All Years"
+        const allYearsOption = yearFilter.querySelector('option[value=""]')
+        yearFilter.innerHTML = ""
+        yearFilter.appendChild(allYearsOption)
+
+        // Add year options (sorted descending)
+        Array.from(years)
+          .sort((a, b) => b - a)
+          .forEach((year) => {
+            const option = document.createElement("option")
+            option.value = year
+            option.textContent = year
+            yearFilter.appendChild(option)
+          })
       } catch (error) {
-        console.error("Error in saveShiftHistory:", error)
-        return null
+        console.error("Error populating year filter:", error)
+      }
+    }
+
+    function setupHistoryFilters() {
+      try {
+        const monthFilter = document.getElementById("monthFilter")
+        const yearFilter = document.getElementById("yearFilter")
+        const dateRangeStart = document.getElementById("dateRangeStart")
+        const dateRangeEnd = document.getElementById("dateRangeEnd")
+        const clearFiltersBtn = document.getElementById("clearFiltersBtn")
+
+        if (monthFilter) {
+          monthFilter.addEventListener("change", (e) => {
+            currentHistoryFilters.month = e.target.value
+            loadShiftHistoryTable()
+          })
+        }
+
+        if (yearFilter) {
+          yearFilter.addEventListener("change", (e) => {
+            currentHistoryFilters.year = e.target.value
+            loadShiftHistoryTable()
+          })
+        }
+
+        if (dateRangeStart) {
+          dateRangeStart.addEventListener("change", (e) => {
+            currentHistoryFilters.dateStart = e.target.value
+            loadShiftHistoryTable()
+          })
+        }
+
+        if (dateRangeEnd) {
+          dateRangeEnd.addEventListener("change", (e) => {
+            currentHistoryFilters.dateEnd = e.target.value
+            loadShiftHistoryTable()
+          })
+        }
+
+        if (clearFiltersBtn) {
+          clearFiltersBtn.addEventListener("click", () => {
+            // Clear all filters
+            currentHistoryFilters = {
+              month: "",
+              year: "",
+              dateStart: "",
+              dateEnd: "",
+            }
+
+            // Reset form elements
+            if (monthFilter) monthFilter.value = ""
+            if (yearFilter) yearFilter.value = ""
+            if (dateRangeStart) dateRangeStart.value = ""
+            if (dateRangeEnd) dateRangeEnd.value = ""
+
+            // Reload table
+            loadShiftHistoryTable()
+          })
+        }
+      } catch (error) {
+        console.error("Error setting up history filters:", error)
       }
     }
 
