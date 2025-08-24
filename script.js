@@ -1,4 +1,4 @@
-(() => {
+;(() => {
   // Wrap everything in a try-catch to prevent any uncaught errors
   try {
     // --- Global Variables ---
@@ -471,7 +471,7 @@
           hour: "2-digit",
           minute: "2-digit",
           second: "2-digit",
-          hour12: true
+          hour12: true,
         }
         shiftStartTime = now.toLocaleString("en-US", timeOptions)
 
@@ -1076,7 +1076,7 @@
         // Restore purchases
         tr._purchases = data.purchases
         // Set status based on table name - if no table name, it's a direct purchase
-        tr._status = (!data.tableName || data.tableName.trim() === "") ? "Purchase" : (data.status || "Unpaid")
+        tr._status = !data.tableName || data.tableName.trim() === "" ? "Purchase" : data.status || "Unpaid"
         attachGroceryRowEvents(tr)
         updateGroceryRow(tr)
         return tr
@@ -2042,7 +2042,7 @@
           statusCellEl.innerHTML = '<span class="grocery-status grocery-purchase">Purchase</span>'
         } else {
           // Has table name = show clickable button
-          const currentStatus = (row._status === "Purchase") ? "Unpaid" : (row._status || "Unpaid")
+          const currentStatus = row._status === "Purchase" ? "Unpaid" : row._status || "Unpaid"
           const statusClass = currentStatus === "Paid" ? "paid" : "unpaid"
           statusCellEl.innerHTML = `<button class="grocery-status-btn ${statusClass}" data-status="${currentStatus}">${currentStatus}</button>`
 
@@ -2100,14 +2100,14 @@
             if (value && !groceryRecallTableNames.includes(value)) {
               groceryRecallTableNames.push(value)
             }
-            
+
             // Update status when table name changes
             if (!value) {
               row._status = "Purchase"
             } else if (row._status === "Purchase") {
               row._status = "Unpaid"
             }
-            
+
             updateGroceryRow(row) // Update status based on table name
             filterGroceryRows() // Filter rows after table name change
             if (!isInitialLoad && !isFirebaseSyncPaused) {
@@ -2222,7 +2222,7 @@
         }
 
         tr._purchases = 0
-        tr._status = "Purchase"  // Default to Purchase for new rows    
+        tr._status = "Purchase" // Default to Purchase for new rows
         attachGroceryRowEvents(tr)
         updateGroceryRow(tr)
         groceryRows.unshift(tr) // Add to beginning of array
@@ -2580,7 +2580,7 @@
           hour: "2-digit",
           minute: "2-digit",
           second: "2-digit",
-          hour12: true
+          hour12: true,
         }
         return d.toLocaleString("en-US", timeOptions)
       } catch (error) {
@@ -2669,7 +2669,11 @@
         loadShiftHistoryTable()
 
         // Show success message with download option
-        if (confirm("Shift ended successfully! Data has been saved to history and tables have been reset.\n\nWould you like to download the report for this shift?")) {
+        if (
+          confirm(
+            "Shift ended successfully! Data has been saved to history and tables have been reset.\n\nWould you like to download the report for this shift?",
+          )
+        ) {
           const filename = `shift_end_${currentData.date.replace(/[: ]/g, "_")}.html`
           exportAsHTML(currentData, filename)
         }
@@ -3009,7 +3013,7 @@
             <td style="padding:12px 8px; text-align:center; color:#43cea2; font-weight:700; font-size:16px;">${row.combinedTotal.toFixed(2)}</td>
             <td style="padding:12px 8px; text-align:center;">
               <button onclick="openHistoryDetail('${row.id}')" style="padding:6px 12px; margin-right:4px; background:#28a745; color:#fff; border:none; border-radius:4px; cursor:pointer; font-size:12px;">Open</button>
-              <button onclick="reExportShift('${row.id}')" style="padding:6px 12px; margin-right:4px; background:#007bff; color:#fff; border:none; border-radius:4px; cursor:pointer; font-size:12px;">Re-Export</button>
+              <button onclick="downloadShift('${row.id}')" style="padding:6px 12px; margin-right:4px; background:#007bff; color:#fff; border:none; border-radius:4px; cursor:pointer; font-size:12px;">Download</button>
               <button onclick="deleteHistoryItem('${row.id}')" style="padding:6px 12px; background:#dc3545; color:#fff; border:none; border-radius:4px; cursor:pointer; font-size:12px;">Delete</button>
             </td>
           `
@@ -3805,7 +3809,8 @@
       }
     }
 
-    window.reExportShift = (id) => {
+    // UPDATED: Changed from reExportShift to downloadShift with save dialog
+    window.downloadShift = (id) => {
       try {
         let history = []
         try {
@@ -3827,10 +3832,13 @@
             expenseRows: historyItem.expenseRows || [],
             billiardBreakdown: historyItem.billiardBreakdown || { tables: {}, grandTotal: 0 },
           }
-          exportToPDF(exportData, historyItem.filename)
+
+          // Use the same download function as end shift with save dialog
+          const filename = `shift_${historyItem.date.replace(/[: ]/g, "_")}.html`
+          exportAsHTML(exportData, filename)
         }
       } catch (error) {
-        console.error("Error re-exporting shift:", error)
+        console.error("Error downloading shift:", error)
       }
     }
 
