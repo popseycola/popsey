@@ -1212,35 +1212,361 @@
       }
     }
 
-    function saveToFirebase(path, data) {
-      try {
-        if (isOnline && firebaseInitialized) {
-          // Save to Realtime Database (existing functionality)
-          if (database) {
-            database
-              .ref(`popsey/${path}`)
-              .set(data)
-              .then(() => console.log(`Data saved to Realtime Database: ${path}`))
-              .catch((error) => console.error("Realtime Database save error:", error))
-          }
+function saveToFirebase(path, data) {
+  try {
+    if (isOnline && firebaseInitialized) {
+      // Save to both databases with merge strategy
+      if (database) {
+        database
+          .ref(`popsey/${path}`)
+          .update(data) // Use update instead of set to merge data
+          .then(() => console.log(`Data merged to Realtime Database: ${path}`))
+          .catch((error) => console.error("Realtime Database merge error:", error))
+      }
 
-          if (firestore) {
-            firestore
-              .collection("popsey")
-              .doc(path)
-              .set(data)
-              .then(() => console.log(`Data saved to Firestore: ${path}`))
-              .catch((error) => console.error("Firestore save error:", error))
-          }
-        } else if (!firebaseInitialized) {
-          console.log("Firebase not available - data saved locally only")
+      if (firestore) {
+        firestore
+          .collection("popsey")
+          .doc(path)
+          .set(data, { merge: true }) // Use merge option to prevent overwriting
+          .then(() => console.log(`Data merged to Firestore: ${path}`))
+          .catch((error) => console.error("Firestore merge error:", error))
+      }
+    } else if (!firebaseInitialized) {
+      console.log("Firebase not available - data saved locally only")
+    } else {
+      addToSyncQueue("save_complete_state", data)
+    }
+  } catch (error) {
+    console.error("Error in saveToFirebase:", error)
+  }
+}
+
+function loadFromFirebase() {
+  return new Promise((resolve) => {
+    if (!firebaseInitialized) {
+      console.log("Firebase not initialized, loading from localStorage only")
+      resolve(loadCompleteState())
+      return
+    }
+
+    let firestoreData = null
+    let realtimeData = null
+    let loadCount = 0
+
+    function checkComplete() {
+      loadCount++
+      if (loadCount >= 2) {
+        // Merge data from both sources, prioritizing the most recent
+        const mergedData = mergeDataSources(firestoreData, realtimeData)
+        if (mergedData) {
+          applyMergedData(mergedData)
+          resolve(mergedData)
         } else {
-          addToSyncQueue("save_complete_state", data)
+          resolve(loadCompleteState())
         }
-      } catch (error) {
-        console.error("Error in saveToFirebase:", error)
       }
     }
+
+    // Load from Firestore
+    if (firestore) {
+      firestore
+        .collection("popsey")
+        .doc("complete_state")
+        .get()
+        .then((doc) => {
+          if (doc.exists) {
+            firestoreData = doc.data()
+            console.log("Data loaded from Firestore")
+          }
+          checkComplete()
+        })
+        .catch((error) => {
+          console.error("Firestore load error:", error)
+          checkComplete()
+        })
+    } else {
+      checkComplete()
+    }
+
+    // Load from Realtime Database
+    if (database) {
+      database
+        .ref("popsey/complete_state")
+        .once("value")
+        .then((snapshot) => {
+          if (snapshot.exists()) {
+            realtimeData = snapshot.val()
+            console.log("Data loaded from Realtime Database")
+          }
+          checkComplete()
+        })
+        .catch((error) => {
+          console.error("Realtime Database load error:", error)
+          checkComplete()
+        })
+    } else {
+      checkComplete()
+    }
+  })
+}
+
+function mergeDataSources(firestoreData, realtimeData) {
+  try {
+    const localData = localStorage.getItem("popsey_complete_state")
+    const localParsed = localData ? JSON.parse(localData) : null
+
+    // Collect all data sources with timestamps
+    const sources = []
+    if (firestoreData && firestoreData.timestamp) {
+      sources.push({ data: firestoreData, source: "firestore", timestamp: firestoreData.timestamp })
+    }
+    if (realtimeData && realtimeData.timestamp) {
+      sources.push({ data: realtimeData, source: "realtime", timestamp: realtimeData.timestamp })
+    }
+    if (localParsed && localParsed.timestamp) {
+      sources.push({ data: localParsed, source: "local", timestamp: localParsed.timestamp })
+    }
+
+    if (sources.length === 0) {
+      console.log("No data sources available")
+      return null
+    }
+
+    // Sort by timestamp (most recent first)
+    sources.sort((a, b) => b.timestamp - a.timestamp)
+    const mostRecent = sources[0]
+
+    console.log(`Using most recent data from ${mostRecent.source} (${new Date(mostRecent.timestamp).toLocaleString()})`)
+
+    // Merge arrays from all sources to prevent data loss
+    const mergedData = { ...mostRecent.data }
+
+    // Merge billiard rows from all sources
+    const allBilliardRows = new Map()
+    sources.forEach(source => {
+      if (source.data.billiardRows) {
+        source.data.billiardRows.forEach(row => {
+          const key = `${row.name}_${row.tableType}`
+          if (!allBilliardRows.has(key) || row.timestamp > (allBilliardRows.get(key).timestamp || 0)) {
+            allBilliardRows.set(key, row)
+          }
+        })
+      }
+    })
+
+    // Merge grocery rows from all sources
+    const allGroceryRows = new Map()
+    sources.forEach(source => {
+      if (source.data.groceryRows) {
+        source.data.groceryRows.forEach(row => {
+          const key = `${row.tableName}_${row.item}`
+          if (!allGroceryRows.has(key) || row.timestamp > (allGroceryRows.get(key).timestamp || 0)) {
+            allGroceryRows.set(key, row)
+          }
+        })
+      }
+    })
+
+    // Merge expense rows from all sources
+    const allExpenseRows = new Map()
+    sources.forEach(source => {
+      if (source.data.expenseRows) {
+        source.data.expenseRows.forEach(row => {
+          const key = `${row.expense}_${row.amount}`
+          if (!allExpenseRows.has(key) || row.timestamp > (allExpenseRows.get(key).timestamp || 0)) {
+            allExpenseRows.set(key, row)
+          }
+        })
+      }
+    })
+
+    mergedData.billiardRows = Array.from(allBilliardRows.values())
+    mergedData.groceryRows = Array.from(allGroceryRows.values())
+    mergedData.expenseRows = Array.from(allExpenseRows.values())
+
+    // Update counts
+    mergedData.billiardRowsCount = mergedData.billiardRows.length
+    mergedData.groceryRowsCount = mergedData.groceryRows.length
+    mergedData.expenseRowsCount = mergedData.expenseRows.length
+
+    return mergedData
+  } catch (error) {
+    console.error("Error merging data sources:", error)
+    return null
+  }
+}
+
+function applyMergedData(mergedData) {
+  try {
+    console.log(`Applying merged data: ${mergedData.billiardRowsCount} billiard, ${mergedData.groceryRowsCount} grocery, ${mergedData.expenseRowsCount} expense rows`)
+
+    // Save merged data locally
+    localStorage.setItem("popsey_complete_state", JSON.stringify(mergedData))
+
+    // Load shift start time with date check
+    if (mergedData.shiftStartTime) {
+      const savedDate = new Date(mergedData.shiftStartTime)
+      const today = new Date()
+
+      if (savedDate.toDateString() === today.toDateString()) {
+        shiftStartTime = mergedData.shiftStartTime
+      } else {
+        shiftStartTime = null
+        localStorage.removeItem("popsey_shift_start_time")
+      }
+      updateShiftStartDisplay()
+    }
+
+    // Clear existing tables first
+    clearAllTables()
+
+    // Restore billiard rows
+    if (mergedData.billiardRows && mergedData.billiardRows.length > 0) {
+      mergedData.billiardRows.forEach((rowData) => {
+        const tr = createBilliardRowFromData(rowData)
+        const tbody = document.getElementById("billiardTbody")
+        if (tbody && tr) {
+          tbody.appendChild(tr)
+          billiardRows.push(tr)
+        }
+      })
+    }
+
+    // Restore grocery rows
+    if (mergedData.groceryRows && mergedData.groceryRows.length > 0) {
+      mergedData.groceryRows.forEach((rowData) => {
+        const tr = createGroceryRowFromData(rowData)
+        const tbody = document.getElementById("groceryTbody")
+        if (tbody && tr) {
+          tbody.appendChild(tr)
+          groceryRows.push(tr)
+        }
+      })
+    }
+
+    // Restore expense rows
+    if (mergedData.expenseRows && mergedData.expenseRows.length > 0) {
+      mergedData.expenseRows.forEach((rowData) => {
+        const tr = createExpenseRowFromData(rowData)
+        const tbody = document.getElementById("expenseTbody")
+        if (tbody && tr) {
+          tbody.appendChild(tr)
+          expenseRows.push(tr)
+        }
+      })
+    }
+
+    // Restore recall data
+    if (mergedData.recallData) {
+      groceryRecallTableNames = new Set(mergedData.recallData.tableNames || [])
+      groceryRecallItems = new Set(mergedData.recallData.items || [])
+    }
+
+    updateDashboardValues()
+    console.log("Merged data applied successfully")
+  } catch (error) {
+    console.error("Error applying merged data:", error)
+  }
+}
+
+function initializeDashboard() {
+  try {
+    console.log("Initializing POPSEY System Dashboard...")
+
+    // Initialize Firebase first
+    initializeFirebase()
+
+    // Load sync queue from localStorage
+    try {
+      const savedQueue = localStorage.getItem("popsey_sync_queue")
+      if (savedQueue) {
+        syncQueue = JSON.parse(savedQueue)
+      }
+    } catch (error) {
+      console.error("Error loading sync queue:", error)
+    }
+
+    updateConnectionStatus()
+
+    // Load data from all sources with proper merging
+    loadFromFirebase().then((loadedData) => {
+      if (!loadedData) {
+        console.log("No data found, initializing with empty tables")
+        clearAllTables()
+      }
+
+      // Set up tab switching
+      setupTabSwitching()
+
+      // Set up all event listeners
+      setupEventListeners()
+
+      setupHistoryFilters()
+
+      // Load shift history from Firebase
+      loadShiftHistoryFromFirebase()
+
+      // Set up real-time listeners for cross-device sync
+      setupRealtimeListeners()
+
+      // Process any pending sync operations
+      if (isOnline) {
+        processSyncQueue()
+      }
+
+      console.log("Dashboard initialization complete")
+    })
+  } catch (error) {
+    console.error("Error initializing dashboard:", error)
+  }
+}
+
+function setupRealtimeListeners() {
+  if (!firebaseInitialized || !database) return
+
+  console.log("Setting up real-time listeners for cross-device sync...")
+
+  // Listen for changes to complete_state
+  database.ref("popsey/complete_state").on("value", (snapshot) => {
+    if (snapshot.exists() && !isFirebaseSyncPaused) {
+      const remoteData = snapshot.val()
+      const localData = localStorage.getItem("popsey_complete_state")
+      const localParsed = localData ? JSON.parse(localData) : null
+
+      // Only update if remote data is newer
+      if (!localParsed || remoteData.timestamp > localParsed.timestamp) {
+        console.log("Remote data is newer, updating local state...")
+        isFirebaseSyncPaused = true // Prevent sync loops
+        applyMergedData(remoteData)
+        setTimeout(() => {
+          isFirebaseSyncPaused = false
+        }, 1000)
+      }
+    }
+  })
+
+  // Listen for changes to shift history
+  database.ref("popsey/shift_history").on("child_added", (snapshot) => {
+    if (snapshot.exists()) {
+      const historyItem = snapshot.val()
+      const existingHistory = JSON.parse(localStorage.getItem("popsey_shift_history") || "[]")
+      
+      // Check if this history item already exists locally
+      const exists = existingHistory.some(item => item.id === historyItem.id)
+      if (!exists) {
+        existingHistory.push(historyItem)
+        localStorage.setItem("popsey_shift_history", JSON.stringify(existingHistory))
+        console.log("New history item synced from remote:", historyItem.id)
+        
+        // Refresh history display if on history tab
+        if (document.querySelector('.tab-content.active')?.id === 'historyTab') {
+          displayShiftHistory()
+        }
+      }
+    }
+  })
+}
 
     // --- ENHANCED: Shift History Firebase Sync ---
     function saveHistoryToFirebase(historyItem) {
@@ -3176,7 +3502,7 @@
                 localStorage.removeItem("popsey_shift_history")
               } catch (error) {
                 console.error("Error clearing history:", error)
-              }
+              }  
 
               // Clear Firebase history if available
               if (isOnline && firebaseInitialized && database) {
